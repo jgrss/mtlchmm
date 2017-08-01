@@ -47,14 +47,15 @@ Results from the above example would be written to:
 >>>                    get_probs=True)
 >>>
 >>> # Predict class conditional probabilities and write to file.
->>> cl.predict('/yr01.tif', '/lc_probas_yr01.tif')
->>> cl.predict('/yr02.tif', '/lc_probas_yr02.tif')
->>> cl.predict('/yr02.tif', '/lc_probas_yr02.tif')
+>>> lc_probabilities = list()
+>>>
+>>> for im in ['/yr01.tif', '/yr04.tif', '/yr03.tif']:
+>>>     out_probs = '/lc_probas_{}'.format(im)
+>>>     cl.predict('/yr01.tif', out_probs)
+>>>     lc_probabilities.append(out_probs)
 >>>
 >>> # Get the class transitional probabilities.
->>> hmm_model = mtlchmm.MTLCHMM(['/lc_probas_yr01.tif', 
->>>                              '/lc_probas_yr02.tif',
->>>                              '/lc_probas_yr03.tif'])
+>>> hmm_model = mtlchmm.MTLCHMM(lc_probabilities)
 >>>
 >>> # Fit the model
 >>> hmm_model.fit(method='forward-backward', 
