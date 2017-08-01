@@ -1,0 +1,79 @@
+import setuptools
+from distutils.core import setup
+import platform
+
+from Cython.Build import cythonize
+# from distutils.extension import Extension
+
+try:
+    from Cython.Distutils import build_ext
+except:
+    from distutils.command import build_ext
+
+import numpy as np
+
+
+__version__ = '0.0.1'
+
+mappy_name = 'mtlchmm'
+maintainer = 'Jordan Graesser'
+maintainer_email = 'graesser@bu.edu'
+description = 'Multi-temporal land cover maps with a Hidden Markov Model'
+git_url = 'https://github.com/jgrss/mtlchmm.git'
+
+with open('README.md') as f:
+    long_description = f.read()
+
+with open('LICENSE.txt') as f:
+    license_file = f.read()
+
+with open('AUTHORS.txt') as f:
+    author_file = f.read()
+
+required_packages = ['joblib>=0.11.0',
+                     'deprecation>=1.0.1']
+
+if platform.system() != 'Windows':
+
+    for pkg in ['numpy>=1.13',
+                'gdal>=2.1',
+                'cython>=0.26']:
+
+        required_packages.append(pkg)
+
+
+def get_packages():
+    return setuptools.find_packages()
+
+
+def get_package_data():
+    return {'': ['*.md', '*.txt']}
+
+
+def setup_package():
+
+    if platform.system() != 'Windows':
+        include_dirs = [np.get_include()]
+    else:
+        include_dirs = None
+
+    metadata = dict(name=mappy_name,
+                    maintainer=maintainer,
+                    maintainer_email=maintainer_email,
+                    description=description,
+                    license=license_file,
+                    version=__version__,
+                    long_description=long_description,
+                    author=author_file,
+                    packages=get_packages(),
+                    package_data=get_package_data(),
+                    cmdclass=dict(build_ext=build_ext),
+                    zip_safe=False,
+                    download_url=git_url,
+                    install_requires=required_packages,
+                    include_dirs=include_dirs)
+
+    setup(**metadata)
+
+if __name__ == '__main__':
+    setup_package()
