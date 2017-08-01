@@ -79,7 +79,7 @@ def forward_backward(n_sample, n_samples, n_steps, n_labels):
     Z[Z == 0] = 1.
 
     # Normalize
-    belief = np.divide(belief, Z.reshape((n_steps, 1)))
+    belief /= Z.reshape((n_steps, 1))
 
     # Return belief as flattened vector
     d_stack[n_sample::n_samples] = belief.ravel()
