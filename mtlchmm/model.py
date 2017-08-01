@@ -219,7 +219,7 @@ class ModelHMM(object):
         self.close()
 
         del out_rst
-                        
+
     def close(self):
 
         for i_info in self.image_infos:
