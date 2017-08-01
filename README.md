@@ -1,6 +1,12 @@
 Multi-temporal land cover maps with a Hidden Markov Model (MTLCHMM)
 ---
 
+This is largely a code port of S. Parker Abercrombie's code from the paper referenced below.
+The main differences between the original code and this library are:
+
+1. MTLCHMM is designed to support any sensor.
+2. Parallel processing at the pixel level is handled differently (however, no tests between the two).
+
 ## Reference
 
 > Abercrombie, S Parker and Friedl, Mark A (2016) Improving the Consistency of Multitemporal Land 
