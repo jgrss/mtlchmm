@@ -1,3 +1,8 @@
+"""
+Code source:
+    @author: S. Parker Abercrombie
+"""
+
 from __future__ import division
 
 import os
