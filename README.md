@@ -65,3 +65,19 @@ Results from the above example would be written to:
 >>>               transition_prior=.1, 
 >>>               n_jobs=-1)
 ```
+
+### Installation
+
+```bash
+git clone https://github.com/jgrss/mtlchmm.git
+cd mtlchmm
+python setup.py install
+```
+
+### Updating
+
+```bash
+cd mtlchmm
+git pull origin master
+python setup.py install
+```
