@@ -49,9 +49,12 @@ Results from the above example would be written to:
 >>> # Predict class conditional probabilities and write to file.
 >>> lc_probabilities = list()
 >>>
->>> for im in ['/yr01.tif', '/yr04.tif', '/yr03.tif']:
+>>> for im in ['/yr01.tif', '/yr02.tif', '/yr03.tif']:
+>>>
 >>>     out_probs = '/lc_probas_{}'.format(im)
->>>     cl.predict('/yr01.tif', out_probs)
+>>>
+>>>     cl.predict(im, out_probs)
+>>>
 >>>     lc_probabilities.append(out_probs)
 >>>
 >>> # Get the class transitional probabilities.
