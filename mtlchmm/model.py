@@ -150,6 +150,15 @@ class ModelHMM(object):
 
             out_name = os.path.join(d_name, '{}_hmm{}'.format(f_base, f_ext))
 
+            if os.path.isfile(out_name):
+                os.remove(out_name)
+
+            if os.path.isfile(out_name + '.ovr'):
+                os.remove(out_name + '.ovr')
+
+            if os.path.isfile(out_name + '.aux.xml'):
+                os.remove(out_name + '.aux.xml')
+
             self.o_infos.append(raster_tools.create_raster(out_name, image_info))
 
     def _block_func(self):
@@ -177,15 +186,27 @@ class ModelHMM(object):
                 # Setup the block stack.
                 d_stack = np.empty((self.n_steps, self.n_labels, n_rows, n_cols), dtype='float32')
 
+                continue_block = False
+
                 # Load the block stack.
                 #   *all time steps + all probability layers @ 1 pixel = d_stack[:, :, 0, 0]
                 for step in range(0, self.n_steps):
 
-                    d_stack[step] = self.image_infos[step].read(bands2open=-1,
-                                                                i=i,
-                                                                j=j,
-                                                                rows=n_rows,
-                                                                cols=n_cols)
+                    step_array = self.image_infos[step].read(bands2open=-1,
+                                                             i=i,
+                                                             j=j,
+                                                             rows=n_rows,
+                                                             cols=n_cols)
+
+                    if step_array.max() == 0:
+
+                        continue_block = True
+                        break
+
+                    d_stack[step] = step_array
+
+                if continue_block:
+                    continue
 
                 d_stack = d_stack.ravel()
 
@@ -218,12 +239,13 @@ class ModelHMM(object):
 
                     # Get the array for the
                     #   current time step.
-                    d_stack_sub = d_stack[0]
+                    d_stack_sub = d_stack[step]
 
                     # Iterate over each probability layer.
                     for layer in range(0, self.n_labels):
 
-                        # Write the block for the current layer.
+                        # Write the block for the
+                        #   current probability layer.
                         out_rst.write_array(d_stack_sub[layer],
                                             i=i,
                                             j=j,
@@ -246,7 +268,7 @@ class ModelHMM(object):
 
         for o_info in self.o_infos:
 
-            o_info.close()
+            o_info.close_file()
             del o_info
 
         del self.o_infos
