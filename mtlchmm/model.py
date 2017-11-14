@@ -90,6 +90,16 @@ def forward_backward(n_sample, n_samples, n_steps, n_labels):
     d_stack[n_sample::n_samples] = belief.ravel()
 
 
+def viterbi():
+
+    """
+    Use the Viterbi algorithm to determine the most likely series
+    of states from a time series.
+    """
+
+    return
+
+
 class ModelHMM(object):
 
     """A class for Hidden Markov Models"""
@@ -117,7 +127,7 @@ class ModelHMM(object):
         self._transition_matrix()
 
         self.methods = {'forward-backward': forward_backward,
-                        'viterbi': self._viterbi}
+                        'viterbi': viterbi}
 
         # Open the images.
         self.image_infos = [raster_tools.ropen(image) for image in self.lc_probabilities]
@@ -146,7 +156,7 @@ class ModelHMM(object):
 
         global d_stack, forward, backward, label_ones
 
-        if self.methods[self.method] == 'forward-backward':
+        if self.method == 'forward-backward':
 
             forward = np.empty((self.n_steps, self.n_labels), dtype='float32')
             backward = np.empty((self.n_steps, self.n_labels), dtype='float32')
@@ -255,6 +265,3 @@ class ModelHMM(object):
         transition_matrix = np.empty((self.n_labels, self.n_labels), dtype='float32')
         transition_matrix.fill(self.transition_prior)
         np.fill_diagonal(transition_matrix, 1. - self.transition_prior)
-
-    def _viterbi(self):
-        return
