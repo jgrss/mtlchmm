@@ -59,6 +59,9 @@ def forward_backward(n_sample, n_samples, n_steps, n_labels):
     # if lw_mask == 1:
     #     WATER_PROB_VECTOR
 
+    import pdb
+    pdb.set_trace()
+
     time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
 
     # Compute forward messages
@@ -184,6 +187,7 @@ class ModelHMM(object):
                 n_samples = n_rows * n_cols
 
                 # Setup the block stack.
+                # time steps x class layers x rows x columns
                 d_stack = np.empty((self.n_steps, self.n_labels, n_rows, n_cols), dtype='float32')
 
                 continue_block = False
