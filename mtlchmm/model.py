@@ -205,7 +205,7 @@ class ModelHMM(object):
                 #   *all time steps + all probability layers @ 1 pixel = d_stack[:, :, 0, 0]
                 for step in range(0, self.n_steps):
 
-                    step_array = self.image_infos[step].read(bands2open=self.n_jobs,
+                    step_array = self.image_infos[step].read(bands2open=-1,
                                                              i=i,
                                                              j=j,
                                                              rows=n_rows,
