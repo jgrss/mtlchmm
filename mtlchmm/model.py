@@ -184,9 +184,6 @@ class ModelHMM(object):
 
             label_ones = np.ones(self.n_labels, dtype='float32')
 
-        import pdb
-        pdb.set_trace()
-
         for i in range(0, self.rows, self.blocks):
 
             n_rows = raster_tools.n_rows_cols(i, self.blocks, self.rows)
@@ -225,6 +222,9 @@ class ModelHMM(object):
                     continue
 
                 d_stack = d_stack.ravel()
+
+                import pdb
+                pdb.set_trace()
 
                 # Process each pixel, getting 1
                 #   pixel for all time steps.
@@ -281,7 +281,7 @@ class ModelHMM(object):
 
         self.close()
 
-        del out_rst
+        out_rst = None
 
     def close(self):
 
