@@ -6,7 +6,8 @@ Code source:
 from __future__ import division
 
 import os
-from joblib import Parallel, delayed
+import multiprocessing as multi
+import ctypes
 
 from .errors import logger
 from mpglue import raster_tools
@@ -15,6 +16,12 @@ try:
     import numpy as np
 except ImportError:
     raise ImportError('NumPy must be installed')
+
+try:
+    mkl_rt = ctypes.CDLL('libmkl_rt.so')
+    MKL_INSTALLED = True
+except:
+    MKL_INSTALLED = False
 
 
 def normalize(v):
@@ -34,7 +41,7 @@ def normalize(v):
     return v
 
 
-def forward_backward(n_sample, n_samples, n_steps, n_labels):
+def forward_backward(n_sample):
 
     """
     Uses the Forward/Backward algorithm to compute marginal probabilities by
@@ -42,9 +49,6 @@ def forward_backward(n_sample, n_samples, n_steps, n_labels):
 
     Args:
         n_sample (int)
-        n_samples (int)
-        n_steps (int)
-        n_labels (int)
 
     time_series (2d array): A 2d array (M x N), where M = time steps and N = class labels.
         Each row represents one time step.
@@ -87,7 +91,9 @@ def forward_backward(n_sample, n_samples, n_steps, n_labels):
     belief /= Z.reshape((n_steps, 1))
 
     # Return belief as flattened vector
-    d_stack[n_sample::n_samples] = belief.ravel()
+    # d_stack[n_sample::n_samples] = belief.ravel()
+
+    return belief.ravel()
 
 
 def viterbi():
@@ -104,7 +110,7 @@ class ModelHMM(object):
 
     """A class for Hidden Markov Models"""
 
-    def fit(self, method='forward-backward', transition_prior=.1, n_jobs=-1):
+    def fit(self, method='forward-backward', transition_prior=.1, n_jobs=1):
 
         """
         Fits a Hidden Markov Model
@@ -112,8 +118,11 @@ class ModelHMM(object):
         Args:
             method (Optional[str]): The method to model. Choices are ['forward-backward', 'viterbi'].
             transition_prior (Optional[float]): The prior probability for class transition from one year to the next.
-            n_jobs (Optional[int]): The number of parallel jobs. Default is -1.
+            n_jobs (Optional[int]): The number of parallel jobs. Default is 1.
         """
+
+        if MKL_INSTALLED:
+            n_threads_ = mkl_rt.MKL_Set_Num_Threads(n_jobs)
 
         self.method = method
         self.transition_prior = float(transition_prior)
@@ -163,7 +172,10 @@ class ModelHMM(object):
 
     def _block_func(self):
 
-        global d_stack, forward, backward, label_ones
+        global d_stack, forward, backward, label_ones, n_samples, n_steps, n_labels
+
+        n_steps = self.n_steps
+        n_labels = self.n_labels
 
         if self.method == 'forward-backward':
 
@@ -219,12 +231,20 @@ class ModelHMM(object):
                 #   K is the number of labels.
                 #
                 # Therefore, each row represents one time step.
-                Parallel(n_jobs=self.n_jobs,
-                         max_nbytes=None)(delayed(self.methods[self.method])(n_sample,
-                                                                             n_samples,
-                                                                             self.n_steps,
-                                                                             self.n_labels)
-                                          for n_sample in range(0, n_samples))
+                pool = multi.Pool(processes=self.n_jobs)
+                hmm_results = pool.map(self.methods[self.method], range(0, n_samples))
+                pool.close()
+                del pool
+
+                # Parallel(n_jobs=self.n_jobs,
+                #          max_nbytes=None)(delayed(self.methods[self.method])(n_sample,
+                #                                                              n_samples,
+                #                                                              self.n_steps,
+                #                                                              self.n_labels)
+                #                           for n_sample in range(0, n_samples))
+
+                import pdb
+                pdb.set_trace()
 
                 # Reshape the results.
                 d_stack = d_stack.reshape(self.n_steps, self.n_labels, n_rows, n_cols)
