@@ -184,6 +184,9 @@ class ModelHMM(object):
 
             label_ones = np.ones(self.n_labels, dtype='float32')
 
+        import pdb
+        pdb.set_trace()
+
         for i in range(0, self.rows, self.blocks):
 
             n_rows = raster_tools.n_rows_cols(i, self.blocks, self.rows)
@@ -245,6 +248,8 @@ class ModelHMM(object):
 
                 import pdb
                 pdb.set_trace()
+
+                np.asarray(hmm_results, dtype='float32').reshape()
 
                 # Reshape the results.
                 d_stack = d_stack.reshape(self.n_steps, self.n_labels, n_rows, n_cols)
