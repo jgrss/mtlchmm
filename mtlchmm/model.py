@@ -127,7 +127,7 @@ class ModelHMM(object):
         self.method = method
         self.transition_prior = float(transition_prior)
         self.n_jobs = n_jobs
-        self.blocks = 2048
+        self.blocks = 100
 
         if not hasattr(self, 'lc_probabilities'):
             logger.error('The `fit` method cannot be executed without data.')
