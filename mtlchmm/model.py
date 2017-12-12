@@ -199,32 +199,29 @@ class ModelHMM(object):
                 # time steps x class layers x rows x columns
                 d_stack = np.empty((self.n_steps, self.n_labels, n_rows, n_cols), dtype='float32')
 
-                continue_block = False
+                block_max = 0
 
                 # Load the block stack.
                 #   *all time steps + all probability layers @ 1 pixel = d_stack[:, :, 0, 0]
                 for step in range(0, self.n_steps):
 
-                    step_array = self.image_infos[step].read(bands2open=-1,
+                    step_array = self.image_infos[step].read(bands2open=self.n_jobs,
                                                              i=i,
                                                              j=j,
                                                              rows=n_rows,
                                                              cols=n_cols)
 
-                    if step_array.max() == 0:
-
-                        continue_block = True
-                        break
+                    block_max = max(block_max, step_array.max())
 
                     d_stack[step] = step_array
 
-                if continue_block:
+                import pdb
+                pdb.set_trace()
+
+                if block_max == 0:
                     continue
 
                 d_stack = d_stack.ravel()
-
-                import pdb
-                pdb.set_trace()
 
                 # Process each pixel, getting 1
                 #   pixel for all time steps.
