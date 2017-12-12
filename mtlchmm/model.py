@@ -209,7 +209,8 @@ class ModelHMM(object):
                                                              i=i,
                                                              j=j,
                                                              rows=n_rows,
-                                                             cols=n_cols)
+                                                             cols=n_cols,
+                                                             d_type='float32')
 
                     block_max = max(block_max, step_array.max())
 
