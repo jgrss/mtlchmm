@@ -70,7 +70,7 @@ def forward_backward(n_sample):
 
     for t in range(1, n_steps):
 
-        v = np.multiply(time_series[t, :], transition_matrix.T.dot(forward[t-1, :]))
+        v = np.multiply(time_series[t, :], transition_matrix.transpose().dot(forward[t-1, :]))
         forward[t, :] = normalize(v)
 
     # Compute backward messages
@@ -216,9 +216,6 @@ class ModelHMM(object):
 
                     d_stack[step] = step_array
 
-                import pdb
-                pdb.set_trace()
-
                 if block_max == 0:
                     continue
 
@@ -247,7 +244,7 @@ class ModelHMM(object):
                 import pdb
                 pdb.set_trace()
 
-                np.asarray(hmm_results, dtype='float32').reshape()
+                hmm_results = np.asarray(hmm_results, dtype='float32').T.reshape(self.n_steps, n_rows, n_cols)
 
                 # Reshape the results.
                 d_stack = d_stack.reshape(self.n_steps, self.n_labels, n_rows, n_cols)
