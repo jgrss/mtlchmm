@@ -93,7 +93,7 @@ def forward_backward(n_sample):
     # Return belief as flattened vector
     # d_stack[n_sample::n_samples] = belief.ravel()
 
-    return belief.ravel()
+    return belief
 
 
 def viterbi():
@@ -241,13 +241,14 @@ class ModelHMM(object):
                 #                                                              self.n_labels)
                 #                           for n_sample in range(0, n_samples))
 
-                import pdb
-                pdb.set_trace()
-
-                hmm_results = np.asarray(hmm_results, dtype='float32').T.reshape(self.n_steps, n_rows, n_cols)
+                hmm_results = np.asarray(hmm_results,
+                                         dtype='float32').T.reshape(self.n_steps,
+                                                                    self.n_labels,
+                                                                    n_rows,
+                                                                    n_cols)
 
                 # Reshape the results.
-                d_stack = d_stack.reshape(self.n_steps, self.n_labels, n_rows, n_cols)
+                # d_stack = d_stack.reshape(self.n_steps, self.n_labels, n_rows, n_cols)
 
                 # Write the block results to file.
 
@@ -260,14 +261,14 @@ class ModelHMM(object):
 
                     # Get the array for the
                     #   current time step.
-                    d_stack_sub = d_stack[step]
+                    hmm_sub = hmm_results[step]
 
                     # Iterate over each probability layer.
                     for layer in range(0, self.n_labels):
 
                         # Write the block for the
                         #   current probability layer.
-                        out_rst.write_array(d_stack_sub[layer],
+                        out_rst.write_array(hmm_sub[layer],
                                             i=i,
                                             j=j,
                                             band=layer+1)
