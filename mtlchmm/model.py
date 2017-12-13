@@ -93,7 +93,7 @@ def forward_backward(n_sample):
     # Return belief as flattened vector
     # d_stack[n_sample::n_samples] = belief.ravel()
 
-    return belief
+    return belief.T
 
 
 def viterbi():
