@@ -110,7 +110,7 @@ class ModelHMM(object):
 
     """A class for Hidden Markov Models"""
 
-    def fit(self, method='forward-backward', transition_prior=.1, n_jobs=1):
+    def fit(self, method='forward-backward', transition_prior=.1, n_jobs=1, **kwargs):
 
         """
         Fits a Hidden Markov Model
@@ -119,6 +119,7 @@ class ModelHMM(object):
             method (Optional[str]): The method to model. Choices are ['forward-backward', 'viterbi'].
             transition_prior (Optional[float]): The prior probability for class transition from one year to the next.
             n_jobs (Optional[int]): The number of parallel jobs. Default is 1.
+            kwargs (Optional): Keyword arguments for `create_raster`.
         """
 
         if MKL_INSTALLED:
@@ -141,12 +142,12 @@ class ModelHMM(object):
         # Open the images.
         self.image_infos = [raster_tools.ropen(image) for image in self.lc_probabilities]
 
-        self._setup_out_infos()
+        self._setup_out_infos(**kwargs)
 
         # Iterate over the image block by block.
         self._block_func()
 
-    def _setup_out_infos(self):
+    def _setup_out_infos(self, **kwargs):
 
         """Creates the output image informations objects"""
 
@@ -168,7 +169,7 @@ class ModelHMM(object):
             if os.path.isfile(out_name + '.aux.xml'):
                 os.remove(out_name + '.aux.xml')
 
-            self.o_infos.append(raster_tools.create_raster(out_name, image_info))
+            self.o_infos.append(raster_tools.create_raster(out_name, image_info, **kwargs))
 
     def _block_func(self):
 
