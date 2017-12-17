@@ -65,12 +65,15 @@ def forward_backward(n_sample):
 
     time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
 
+    if time_series.max() == 0:
+        return time_series.T
+
     # Compute forward messages
     forward[0, :] = time_series[0, :]
 
     for t in range(1, n_steps):
 
-        v = np.multiply(time_series[t, :], transition_matrix.transpose().dot(forward[t-1, :]))
+        v = np.multiply(time_series[t, :], transition_matrix_t.dot(forward[t-1, :]))
         forward[t, :] = normalize(v)
 
     # Compute backward messages
@@ -96,6 +99,7 @@ def forward_backward(n_sample):
     return belief.T
 
 
+# TODO
 def viterbi():
 
     """
@@ -170,6 +174,8 @@ class ModelHMM(object):
                 os.remove(out_name + '.aux.xml')
 
             self.o_infos.append(raster_tools.create_raster(out_name, image_info, **kwargs))
+
+        self.out_blocks = os.path.join(d_name, 'hmm_BLOCK.txt')
 
     def _block_func(self):
 
@@ -276,6 +282,9 @@ class ModelHMM(object):
 
                         out_rst.close_band()
 
+                with open(self.out_blocks.replace('_BLOCK', '{:04d}_{:04d}'.format(i, j)), 'wb') as btxt:
+                    btxt.write('complete')
+
         self.close()
 
         out_rst = None
@@ -305,8 +314,10 @@ class ModelHMM(object):
             transition_matrix
         """
 
-        global transition_matrix
+        global transition_matrix, transition_matrix_t
 
         transition_matrix = np.empty((self.n_labels, self.n_labels), dtype='float32')
         transition_matrix.fill(self.transition_prior)
         np.fill_diagonal(transition_matrix, 1. - self.transition_prior)
+
+        transition_matrix_t = transition_matrix.T
