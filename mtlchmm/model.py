@@ -153,7 +153,7 @@ class ModelHMM(object):
 
     def _setup_out_infos(self, **kwargs):
 
-        """Creates the output image informations objects"""
+        """Creates the output image information objects"""
 
         self.o_infos = list()
 
@@ -164,16 +164,16 @@ class ModelHMM(object):
 
             out_name = os.path.join(d_name, '{}_hmm{}'.format(f_base, f_ext))
 
-            if os.path.isfile(out_name):
-                os.remove(out_name)
-
             if os.path.isfile(out_name + '.ovr'):
                 os.remove(out_name + '.ovr')
 
             if os.path.isfile(out_name + '.aux.xml'):
                 os.remove(out_name + '.aux.xml')
 
-            self.o_infos.append(raster_tools.create_raster(out_name, image_info, **kwargs))
+            if os.path.isfile(out_name):
+                self.o_infos.append(raster_tools.ropen(out_name, open2read=False))
+            else:
+                self.o_infos.append(raster_tools.create_raster(out_name, image_info, **kwargs))
 
         self.out_blocks = os.path.join(d_name, 'hmm_BLOCK.txt')
 
@@ -196,6 +196,11 @@ class ModelHMM(object):
             n_rows = raster_tools.n_rows_cols(i, self.blocks, self.rows)
 
             for j in range(0, self.cols, self.blocks):
+
+                hmm_block_tracker = self.out_blocks.replace('_BLOCK', '{:04d}_{:04d}'.format(i, j))
+
+                if os.path.isfile(hmm_block_tracker):
+                    continue
 
                 n_cols = raster_tools.n_rows_cols(j, self.blocks, self.cols)
 
@@ -282,7 +287,7 @@ class ModelHMM(object):
 
                         out_rst.close_band()
 
-                with open(self.out_blocks.replace('_BLOCK', '{:04d}_{:04d}'.format(i, j)), 'wb') as btxt:
+                with open(hmm_block_tracker, 'wb') as btxt:
                     btxt.write('complete')
 
         self.close()
