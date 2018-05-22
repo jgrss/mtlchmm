@@ -76,7 +76,7 @@ Results from the above example would be written to:
 ### Installation
 
 ```bash
-git clone https://github.com/jgrss/mtlchmm.git
+git clone https://github.com/BU-LCSC/mtlchmm.git
 cd mtlchmm
 python setup.py install
 ```
