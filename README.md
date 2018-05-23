@@ -73,7 +73,15 @@ Results from the above example would be written to:
 >>>               n_jobs=-1)
 ```
 
-### Installation
+Installation
+---
+
+### Dependencies
+
+* NumPy
+* [MpGlue](https://github.com/jgrss/mpglue)
+
+### Clone the latest version
 
 ```bash
 git clone https://github.com/BU-LCSC/mtlchmm.git
