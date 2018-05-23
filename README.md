@@ -35,7 +35,7 @@ Results from the above example would be written to:
 /lc_probas_yr03_hmm.tif
 ```
 
-### Full example with classification
+### Full example with classification using [MpGlue](https://github.com/jgrss/mpglue)
 
 ```python
 >>> import mpglue as gl
