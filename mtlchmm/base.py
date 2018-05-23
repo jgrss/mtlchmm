@@ -1,5 +1,3 @@
-import os
-
 from .model import ModelHMM
 from .errors import logger
 

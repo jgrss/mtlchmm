@@ -23,7 +23,7 @@ Cover Maps Using a Hidden Markov Model. _IEEE TRANSACTIONS ON GEOSCIENCE AND REM
 >>>                              '/lc_probas_yr03.tif'])
 >>>
 >>> hmm_model.fit(method='forward-backward', 
->>>               transition_prior=.1, 
+>>>               transition_prior=0.1,
 >>>               n_jobs=-1)
 ```
 
@@ -69,7 +69,7 @@ Results from the above example would be written to:
 >>>
 >>> # Fit the model
 >>> hmm_model.fit(method='forward-backward', 
->>>               transition_prior=.1, 
+>>>               transition_prior=0.1,
 >>>               n_jobs=-1)
 ```
 

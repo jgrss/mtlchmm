@@ -2,9 +2,6 @@ import setuptools
 from distutils.core import setup
 import platform
 
-from Cython.Build import cythonize
-# from distutils.extension import Extension
-
 try:
     from Cython.Distutils import build_ext
 except:
@@ -31,15 +28,10 @@ with open('AUTHORS.txt') as f:
     author_file = f.read()
 
 required_packages = ['joblib>=0.11.0',
-                     'deprecation>=1.0.1']
-
-if platform.system() != 'Windows':
-
-    for pkg in ['numpy>=1.13',
-                'gdal>=2.1',
-                'cython>=0.26']:
-
-        required_packages.append(pkg)
+                     'deprecation>=1.0.1',
+                     'numpy>=1.13',
+                     'gdal>=2.1',
+                     'cython>=0.26']
 
 
 def get_packages():
@@ -74,6 +66,7 @@ def setup_package():
                     include_dirs=include_dirs)
 
     setup(**metadata)
+
 
 if __name__ == '__main__':
     setup_package()

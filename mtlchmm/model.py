@@ -4,12 +4,14 @@ Code source:
 """
 
 from __future__ import division
+from builtins import int
 
 import os
 import multiprocessing as multi
 import ctypes
 
 from .errors import logger
+
 from mpglue import raster_tools
 
 try:
@@ -114,7 +116,7 @@ class ModelHMM(object):
 
     """A class for Hidden Markov Models"""
 
-    def fit(self, method='forward-backward', transition_prior=.1, n_jobs=1, **kwargs):
+    def fit(self, method='forward-backward', transition_prior=0.1, n_jobs=1, block_size=2000, **kwargs):
 
         """
         Fits a Hidden Markov Model
@@ -122,8 +124,10 @@ class ModelHMM(object):
         Args:
             method (Optional[str]): The method to model. Choices are ['forward-backward', 'viterbi'].
             transition_prior (Optional[float]): The prior probability for class transition from one year to the next.
+                Default is 0.1.
             n_jobs (Optional[int]): The number of parallel jobs. Default is 1.
-            kwargs (Optional): Keyword arguments for `create_raster`.
+            block_size (Optional[int]): The block size for in-memory processing. Default is 2000.
+            kwargs (Optional): Keyword arguments for `mpglue` `create_raster`.
         """
 
         if MKL_INSTALLED:
@@ -131,8 +135,8 @@ class ModelHMM(object):
 
         self.method = method
         self.transition_prior = float(transition_prior)
-        self.n_jobs = n_jobs
-        self.blocks = 2048
+        self.n_jobs = int(n_jobs)
+        self.block_size = int(block_size)
 
         if not hasattr(self, 'lc_probabilities'):
             logger.error('The `fit` method cannot be executed without data.')
@@ -191,18 +195,18 @@ class ModelHMM(object):
 
             label_ones = np.ones(self.n_labels, dtype='float32')
 
-        for i in range(0, self.rows, self.blocks):
+        for i in range(0, self.rows, self.block_size):
 
-            n_rows = raster_tools.n_rows_cols(i, self.blocks, self.rows)
+            n_rows = raster_tools.n_rows_cols(i, self.block_size, self.rows)
 
-            for j in range(0, self.cols, self.blocks):
+            for j in range(0, self.cols, self.block_size):
 
                 hmm_block_tracker = self.out_blocks.replace('_BLOCK', '{:04d}_{:04d}'.format(i, j))
 
                 if os.path.isfile(hmm_block_tracker):
                     continue
 
-                n_cols = raster_tools.n_rows_cols(j, self.blocks, self.cols)
+                n_cols = raster_tools.n_rows_cols(j, self.block_size, self.cols)
 
                 # Total samples in the block.
                 n_samples = n_rows * n_cols
@@ -325,6 +329,6 @@ class ModelHMM(object):
 
         transition_matrix = np.empty((self.n_labels, self.n_labels), dtype='float32')
         transition_matrix.fill(self.transition_prior)
-        np.fill_diagonal(transition_matrix, 1. - self.transition_prior)
+        np.fill_diagonal(transition_matrix, 1.0 - self.transition_prior)
 
         transition_matrix_t = transition_matrix.T
