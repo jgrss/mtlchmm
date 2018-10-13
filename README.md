@@ -18,13 +18,13 @@ Cover Maps Using a Hidden Markov Model](https://ieeexplore.ieee.org/document/725
 ```python
 >>> import mtlchmm
 >>>
->>> hmm_model = mtlchmm.MTLCHMM(['/lc_probas_yr01.tif', 
->>>                              '/lc_probas_yr02.tif',
->>>                              '/lc_probas_yr03.tif'])
+>>> hmm_model = mtlchmm.MTLCHMM(method='forward-backward', 
+>>>                             transition_prior=0.1,
+>>>                             n_jobs=-1)
 >>>
->>> hmm_model.fit(method='forward-backward', 
->>>               transition_prior=0.1,
->>>               n_jobs=-1)
+>>> hmm_model.fit_predict(['lc_probas_yr01.tif', 
+>>>                        'lc_probas_yr02.tif',
+>>>                        'lc_probas_yr03.tif'])
 ```
 
 ```text
@@ -43,34 +43,36 @@ Results from the above example would be written to:
 >>>
 >>> cl = gl.classification()
 >>>
->>> # Sample land cover
+>>> # Load land cover samples.
 >>> cl.split_samples('/samples.txt')
 >>>
->>> # Train a Random Forest classification model and
->>> #   return class conditional probabilities.
+>>> # Train a Random Forest classification model.
 >>> cl.construct_model(classifier_info={'classifier': 'RF',
 >>>                                     'trees': 1000,
->>>                                     'max_depth': 25},
->>>                    get_probs=True)
+>>>                                     'max_depth': 25})
 >>>
->>> # Predict class conditional probabilities and write to file.
 >>> lc_probabilities = list()
 >>>
->>> for im in ['/yr01.tif', '/yr02.tif', '/yr03.tif']:
+>>> # Predict class conditional probabilities and write to file.
+>>> for im in ['yr01.tif', 'yr02.tif', 'yr03.tif']:
 >>>
->>>     out_probs = '/lc_probas_{}'.format(im)
+>>>     out_probs = '{}_probas.tif'.format(im.split('.')[0])
 >>>
->>>     cl.predict(im, out_probs)
+>>>     cl.predict(im, 
+>>>                out_probs,
+>>>                predict_probs=True)
 >>>
+>>>     # Store output file names.
 >>>     lc_probabilities.append(out_probs)
 >>>
 >>> # Get the class transitional probabilities.
->>> hmm_model = mtlchmm.MTLCHMM(lc_probabilities)
+>>> hmm_model = mtlchmm.MTLCHMM(method='forward-backward', 
+>>>                             transition_prior=0.1,
+>>>                             n_jobs=-1)
 >>>
->>> # Fit the model
->>> hmm_model.fit(method='forward-backward', 
->>>               transition_prior=0.1,
->>>               n_jobs=-1)
+>>> # Fit the HMM model and write 
+>>> #   adjusted probabilities to file.
+>>> hmm_model.fit_predict(lc_probabilities)
 ```
 
 Installation

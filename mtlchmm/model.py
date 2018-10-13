@@ -116,30 +116,51 @@ class ModelHMM(object):
 
     """A class for Hidden Markov Models"""
 
-    def fit(self, method='forward-backward', transition_prior=0.1, n_jobs=1, block_size=2000, **kwargs):
+    def fit_predict(self, lc_probabilities):
 
         """
         Fits a Hidden Markov Model
 
         Args:
-            method (Optional[str]): The method to model. Choices are ['forward-backward', 'viterbi'].
-            transition_prior (Optional[float]): The prior probability for class transition from one year to the next.
-                Default is 0.1.
-            n_jobs (Optional[int]): The number of parallel jobs. Default is 1.
-            block_size (Optional[int]): The block size for in-memory processing. Default is 2000.
-            kwargs (Optional): Keyword arguments for `mpglue` `create_raster`.
+            lc_probabilities (str list): A list of image class conditional probabilities. Each image in the list
+                should be shaped [layers x rows x columns], where layers are equal to the number of land cover
+                classes.
         """
 
-        if MKL_INSTALLED:
-            n_threads_ = mkl_rt.MKL_Set_Num_Threads(n_jobs)
+        if not lc_probabilities:
 
-        self.method = method
-        self.transition_prior = float(transition_prior)
-        self.n_jobs = int(n_jobs)
-        self.block_size = int(block_size)
-
-        if not hasattr(self, 'lc_probabilities'):
             logger.error('The `fit` method cannot be executed without data.')
+            raise ValueError
+
+        if MKL_INSTALLED:
+            n_threads_ = mkl_rt.MKL_Set_Num_Threads(self.n_jobs)
+
+        self.lc_probabilities = lc_probabilities
+        self.n_steps = len(self.lc_probabilities)
+
+        # Get image information.
+        with raster_tools.ropen(self.lc_probabilities[0]) as i_info:
+
+            self.n_labels = i_info.bands
+            self.rows = i_info.rows
+            self.cols = i_info.cols
+
+        i_info = None
+
+        if not isinstance(self.n_labels, int):
+
+            logger.error('The number of layers was not properly extracted from the image set.')
+            raise TypeError
+
+        if not isinstance(self.rows, int):
+
+            logger.error('The number of rows was not properly extracted from the image set.')
+            raise TypeError
+
+        if not isinstance(self.cols, int):
+
+            logger.error('The number of columns was not properly extracted from the image set.')
+            raise TypeError
 
         # Setup the transition matrix.
         self._transition_matrix()
@@ -150,14 +171,21 @@ class ModelHMM(object):
         # Open the images.
         self.image_infos = [raster_tools.ropen(image) for image in self.lc_probabilities]
 
-        self._setup_out_infos(**kwargs)
+        self._setup_out_infos(**self.kwargs)
 
         # Iterate over the image block by block.
         self._block_func()
 
     def _setup_out_infos(self, **kwargs):
 
-        """Creates the output image information objects"""
+        """
+        Creates the output image information objects
+        """
+
+        if isinstance(self.out_dir, str):
+
+            if not os.path.isdir(self.out_dir):
+                os.makedirs(self.out_dir)
 
         self.o_infos = list()
 
@@ -165,6 +193,9 @@ class ModelHMM(object):
 
             d_name, f_name = os.path.split(image_info.file_name)
             f_base, f_ext = os.path.splitext(f_name)
+
+            if isinstance(self.out_dir, str):
+                d_name = self.out_dir
 
             out_name = os.path.join(d_name, '{}_hmm{}'.format(f_base, f_ext))
 
@@ -177,7 +208,15 @@ class ModelHMM(object):
             if os.path.isfile(out_name):
                 self.o_infos.append(raster_tools.ropen(out_name, open2read=False))
             else:
-                self.o_infos.append(raster_tools.create_raster(out_name, image_info, **kwargs))
+
+                o_info = image_info.copy()
+
+                if self.assign_class:
+
+                    o_info.update_info(storage='byte',
+                                       bands=1)
+
+                self.o_infos.append(raster_tools.create_raster(out_name, o_info, **kwargs))
 
         self.out_blocks = os.path.join(d_name, 'hmm_BLOCK.txt')
 
@@ -250,7 +289,7 @@ class ModelHMM(object):
                 pool = multi.Pool(processes=self.n_jobs)
                 hmm_results = pool.map(self.methods[self.method], range(0, n_samples))
                 pool.close()
-                del pool
+                pool = None
 
                 # Parallel(n_jobs=self.n_jobs,
                 #          max_nbytes=None)(delayed(self.methods[self.method])(n_sample,
@@ -281,17 +320,40 @@ class ModelHMM(object):
                     #   current time step.
                     hmm_sub = hmm_results[step]
 
-                    # Iterate over each probability layer.
-                    for layer in range(0, self.n_labels):
+                    if self.assign_class:
 
-                        # Write the block for the
-                        #   current probability layer.
-                        out_rst.write_array(hmm_sub[layer],
+                        probabilities_argmax = hmm_sub.argmax(axis=0)
+
+                        if isinstance(self.class_list, list):
+
+                            predictions = np.zeros(probabilities_argmax.shape, dtype='uint8')
+
+                            for class_index, real_class in enumerate(self.class_list):
+                                predictions[probabilities_argmax == class_index] = real_class
+
+                        else:
+                            predictions = probabilities_argmax
+
+                        out_rst.write_array(predictions,
                                             i=i,
                                             j=j,
-                                            band=layer+1)
+                                            band=1)
 
                         out_rst.close_band()
+
+                    else:
+
+                        # Iterate over each probability layer.
+                        for layer in range(0, self.n_labels):
+
+                            # Write the block for the
+                            #   current probability layer.
+                            out_rst.write_array(hmm_sub[layer],
+                                                i=i,
+                                                j=j,
+                                                band=layer+1)
+
+                            out_rst.close_band()
 
                 with open(hmm_block_tracker, 'wb') as btxt:
                     btxt.write('complete')
@@ -305,30 +367,31 @@ class ModelHMM(object):
         for i_info in self.image_infos:
 
             i_info.close()
-            del i_info
+            i_info = None
 
-        del self.image_infos
+        self.image_infos = None
 
         for o_info in self.o_infos:
 
             o_info.close_file()
-            del o_info
+            o_info = None
 
-        del self.o_infos
+        self.o_infos = None
 
     def _transition_matrix(self):
 
         """
         Constructs the transition matrix
-
-        Attributes:
-            transition_matrix
         """
 
         global transition_matrix, transition_matrix_t
 
-        transition_matrix = np.empty((self.n_labels, self.n_labels), dtype='float32')
-        transition_matrix.fill(self.transition_prior)
-        np.fill_diagonal(transition_matrix, 1.0 - self.transition_prior)
+        if isinstance(self.transition_prior, np.ndarray):
+            transition_matrix = self.transition_prior
+        else:
+
+            transition_matrix = np.empty((self.n_labels, self.n_labels), dtype='float32')
+            transition_matrix.fill(self.transition_prior)
+            np.fill_diagonal(transition_matrix, 1.0 - self.transition_prior)
 
         transition_matrix_t = transition_matrix.T

@@ -10,7 +10,7 @@ except:
 import numpy as np
 
 
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 mappy_name = 'mtlchmm'
 maintainer = 'Jordan Graesser'
@@ -28,10 +28,7 @@ with open('AUTHORS.txt') as f:
     author_file = f.read()
 
 required_packages = ['joblib>=0.11.0',
-                     'deprecation>=1.0.1',
-                     'numpy>=1.13',
-                     'gdal>=2.1',
-                     'cython>=0.26']
+                     'numpy>=1.13']
 
 
 def get_packages():
