@@ -267,6 +267,8 @@ class ModelHMM(object):
                                                              cols=n_cols,
                                                              d_type='float32')
 
+                    step_array /= step_array.max(axis=0)
+
                     step_array[np.isnan(step_array) | np.isinf(step_array)] = 0
 
                     block_max = max(block_max, step_array.max())
