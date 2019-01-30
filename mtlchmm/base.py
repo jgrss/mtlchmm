@@ -52,7 +52,7 @@ class MTLCHMM(ModelHMM):
             raise NameError
 
         self.method = method
-        self.transition_prior = float(transition_prior)
+        self.transition_prior = transition_prior
         self.n_jobs = int(n_jobs)
         self.block_size = int(block_size)
         self.assign_class = assign_class
