@@ -1,3 +1,5 @@
+import multiprocessing as multi
+
 from .errors import logger
 from .model import ModelHMM
 
@@ -53,7 +55,7 @@ class MTLCHMM(ModelHMM):
 
         self.method = method
         self.transition_prior = transition_prior
-        self.n_jobs = int(n_jobs)
+        self.n_jobs = multi.cpu_count() if n_jobs == -1 else n_jobs
         self.block_size = int(block_size)
         self.assign_class = assign_class
         self.class_list = class_list
