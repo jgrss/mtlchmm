@@ -50,20 +50,24 @@ def _forward(time_series):
     Forward algorithm
     """
 
-    # Compute forward messages
-    forward[0, :] = time_series[0, :] * np.pi
+    # Initial probability
+    forward[0] = time_series[0]
 
     for t in range(1, n_steps):
-        forward[t, :] = np.multiply(time_series[t, :], transition_matrix.dot(forward[t-1, :]))
+
+        v = np.multiply(time_series[t], transition_matrix_t.dot(forward[t-1]))
+        forward[t] = normalize(v)
 
 
 def _backward(time_series):
 
-    # Compute backward messages
-    backward[n_steps-1, :] = label_ones
+    # Initial probability
+    backward[n_steps-1] = label_ones
 
     for t in range(n_steps-1, 0, -1):
-        backward[t-1, :] = np.dot(transition_matrix, np.multiply(time_series[t, :], backward[t, :]))
+
+        v = np.dot(transition_matrix, np.multiply(time_series[t], backward[t]))
+        backward[t-1, :] = normalize(v)
 
 
 def _likelihood():
@@ -80,8 +84,7 @@ def _likelihood():
 
 def forward_backward(n_sample):
 
-    import pdb;pdb.set_trace()
-
+    # Time x Labels
     time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
 
     if time_series.max() == 0:
@@ -89,6 +92,8 @@ def forward_backward(n_sample):
 
     _forward(time_series)
     _backward(time_series)
+
+    import pdb;pdb.set_trace()
 
     return _likelihood()
 
