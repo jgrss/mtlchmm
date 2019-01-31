@@ -44,38 +44,39 @@ def normalize(v):
     return v
 
 
-def _forward(time_series):
+def _forward(time_series, fc):
 
     """
     Forward algorithm
     """
 
     # Initial probability
-    forward[0] = time_series[0]
+    fc[0] = time_series[0]
 
     for t in range(1, n_steps):
 
-        v = time_series[t] * transition_matrix.dot(forward[t-1])
-        forward[t] = normalize(v)
+        v = time_series[t] * transition_matrix.dot(fc[t-1])
+        fc[t] = normalize(v)
+
+    return fc
 
 
-def _backward(time_series):
+def _backward(time_series, bc):
 
     # Initial probability
-    backward[n_steps-1] = 1
+    bc[n_steps-1] = 1
 
     for t in range(n_steps-1, 0, -1):
 
-        v = np.dot(transition_matrix, (time_series[t] * backward[t]))
-        backward[t-1, :] = normalize(v)
+        v = np.dot(transition_matrix, (time_series[t] * bc[t]))
+        bc[t-1, :] = normalize(v)
 
-    # A_mat = transition_matrix
-    # O_mat = time_series
+    return bc
 
 
-def _likelihood():
+def _likelihood(fc, bc):
 
-    posterior = np.multiply(forward, backward)
+    posterior = fc * bc
     z = posterior.sum(axis=1)
 
     # Ignore zero entries
@@ -87,16 +88,19 @@ def _likelihood():
 
 def forward_backward(n_sample):
 
+    fc = forward.copy()
+    bc = backward.copy()
+
     # Time x Labels
     time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
 
     if time_series.max() == 0:
         return time_series.T
 
-    _forward(time_series)
-    _backward(time_series)
+    fc = _forward(time_series, fc)
+    bc = _backward(time_series, bc)
 
-    return _likelihood()
+    return _likelihood(fc, bc)
 
 
 def _forward_backward(n_sample):
