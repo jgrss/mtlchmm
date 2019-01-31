@@ -11,6 +11,7 @@ import multiprocessing as multi
 import ctypes
 
 from .errors import logger
+from .pool import pooler
 
 from mpglue import raster_tools
 
@@ -43,7 +44,56 @@ def normalize(v):
     return v
 
 
+def _forward(time_series):
+
+    """
+    Forward algorithm
+    """
+
+    # Compute forward messages
+    forward[0, :] = time_series[0, :] * np.pi
+
+    for t in range(1, n_steps):
+        forward[t, :] = np.multiply(time_series[t, :], transition_matrix.dot(forward[t-1, :]))
+
+
+def _backward(time_series):
+
+    # Compute backward messages
+    backward[n_steps-1, :] = label_ones
+
+    for t in range(n_steps-1, 0, -1):
+        backward[t-1, :] = np.dot(transition_matrix, np.multiply(time_series[t, :], backward[t, :]))
+
+
+def _likelihood():
+
+    posterior = np.multiply(forward, backward)
+    z = posterior.sum(axis=1)
+
+    # Ignore zero entries
+    posterior[posterior == 0] = 1.0
+
+    # Normalize
+    return (posterior / z.reshape((n_steps, 1))).T
+
+
 def forward_backward(n_sample):
+
+    import pdb;pdb.set_trace()
+
+    time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
+
+    if time_series.max() == 0:
+        return time_series.T
+
+    _forward(time_series)
+    _backward(time_series)
+
+    return _likelihood()
+
+
+def _forward_backward(n_sample):
 
     """
     Uses the Forward/Backward algorithm to compute marginal probabilities by
@@ -59,11 +109,6 @@ def forward_backward(n_sample):
         For background on this algorithm see Section 17.4.2 of
         'Machine Learning: A Probabilistic Perspective' by Kevin Murphy.
     """
-
-    # TODO: implement a user mask
-    # lw_mask = time_series[0]
-    # if lw_mask == 1:
-    #     WATER_PROB_VECTOR
 
     time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
 
@@ -90,7 +135,7 @@ def forward_backward(n_sample):
     Z = belief.sum(axis=1)
 
     # Ignore zero entries
-    Z[Z == 0] = 1.
+    Z[Z == 0] = 1.0
 
     # Normalize
     belief /= Z.reshape((n_steps, 1))
@@ -260,7 +305,7 @@ class ModelHMM(object):
                 #   *all time steps + all probability layers @ 1 pixel = d_stack[:, :, 0, 0]
                 for step in range(0, self.n_steps):
 
-                    step_array = self.image_infos[step].read(bands2open=self.n_jobs,
+                    step_array = self.image_infos[step].read(bands2open=-1,
                                                              i=i,
                                                              j=j,
                                                              rows=n_rows,
@@ -288,10 +333,10 @@ class ModelHMM(object):
                 #   K is the number of labels.
                 #
                 # Therefore, each row represents one time step.
-                pool = multi.Pool(processes=self.n_jobs)
-                hmm_results = pool.map(self.methods[self.method], range(0, n_samples))
-                pool.close()
-                pool = None
+                # with pooler(processes=self.n_jobs) as pool:
+                #     hmm_results = np.array(pool.map(self.methods[self.method], range(0, n_samples)), dtype='float32')
+
+                hmm_results = np.array(map(self.methods[self.method], range(0, 10)), dtype='float32')
 
                 # Parallel(n_jobs=self.n_jobs,
                 #          max_nbytes=None)(delayed(self.methods[self.method])(n_sample,
@@ -300,11 +345,10 @@ class ModelHMM(object):
                 #                                                              self.n_labels)
                 #                           for n_sample in range(0, n_samples))
 
-                hmm_results = np.asarray(hmm_results,
-                                         dtype='float32').T.reshape(self.n_steps,
-                                                                    self.n_labels,
-                                                                    n_rows,
-                                                                    n_cols)
+                hmm_results = hmm_results.T.reshape(self.n_steps,
+                                                    self.n_labels,
+                                                    n_rows,
+                                                    n_cols)
 
                 # Reshape the results.
                 # d_stack = d_stack.reshape(self.n_steps, self.n_labels, n_rows, n_cols)
