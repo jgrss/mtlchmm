@@ -55,19 +55,22 @@ def _forward(time_series):
 
     for t in range(1, n_steps):
 
-        v = np.multiply(time_series[t], transition_matrix_t.dot(forward[t-1]))
+        v = time_series[t] * transition_matrix.dot(forward[t-1])
         forward[t] = normalize(v)
 
 
 def _backward(time_series):
 
     # Initial probability
-    backward[n_steps-1] = label_ones
+    backward[n_steps-1] = 1
 
     for t in range(n_steps-1, 0, -1):
 
-        v = np.dot(transition_matrix, np.multiply(time_series[t], backward[t]))
+        v = np.dot(transition_matrix, (time_series[t] * backward[t]))
         backward[t-1, :] = normalize(v)
+
+    # A_mat = transition_matrix
+    # O_mat = time_series
 
 
 def _likelihood():
@@ -92,8 +95,6 @@ def forward_backward(n_sample):
 
     _forward(time_series)
     _backward(time_series)
-
-    import pdb;pdb.set_trace()
 
     return _likelihood()
 
@@ -342,6 +343,8 @@ class ModelHMM(object):
                 #     hmm_results = np.array(pool.map(self.methods[self.method], range(0, n_samples)), dtype='float32')
 
                 hmm_results = np.array(map(self.methods[self.method], range(0, 10)), dtype='float32')
+
+                import pdb;pdb.set_trace()
 
                 # Parallel(n_jobs=self.n_jobs,
                 #          max_nbytes=None)(delayed(self.methods[self.method])(n_sample,
