@@ -339,12 +339,10 @@ class ModelHMM(object):
                 #   K is the number of labels.
                 #
                 # Therefore, each row represents one time step.
-                # with pooler(processes=self.n_jobs) as pool:
-                #     hmm_results = np.array(pool.map(self.methods[self.method], range(0, n_samples)), dtype='float32')
+                with pooler(processes=self.n_jobs) as pool:
+                    hmm_results = np.array(pool.map(self.methods[self.method], range(0, n_samples)), dtype='float32')
 
-                hmm_results = np.array(map(self.methods[self.method], range(0, 10)), dtype='float32')
-
-                import pdb;pdb.set_trace()
+                # hmm_results = np.array(map(self.methods[self.method], range(0, 10)), dtype='float32')
 
                 # Parallel(n_jobs=self.n_jobs,
                 #          max_nbytes=None)(delayed(self.methods[self.method])(n_sample,
