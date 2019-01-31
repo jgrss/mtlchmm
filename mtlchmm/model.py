@@ -411,8 +411,10 @@ class ModelHMM(object):
 
                             out_rst.close_band()
 
-                with open(hmm_block_tracker, 'wb') as btxt:
-                    btxt.write('complete')
+                if self.track_blocks:
+
+                    with open(hmm_block_tracker, 'wb') as btxt:
+                        btxt.write('complete')
 
         self.close()
 
