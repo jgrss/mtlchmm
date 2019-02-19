@@ -229,8 +229,6 @@ class ModelHMM(object):
 
         self.left, self.bottom, self.right, self.top, self.cell_size, self.n_labels, self.rows, self.cols = _get_min_extent(self.lc_probabilities)
 
-        import pdb;pdb.set_trace()
-
         if not isinstance(self.n_labels, int):
 
             logger.error('The number of layers was not properly extracted from the image set.')
