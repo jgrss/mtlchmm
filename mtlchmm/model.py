@@ -189,12 +189,12 @@ def _get_min_extent(image_list):
         src = None
 
     if ((min_left < 0) and (min_right < 0)) or ((min_left >= 0) and (min_right >= 0)):
-        columns = int(round(abs(min_right) - abs(min_left) / cell_size))
+        columns = int(round((abs(min_right) - abs(min_left)) / cell_size))
     else:
         columns = int(round((abs(min_right) + abs(min_left)) / cell_size))
 
     if ((min_bottom < 0) and (min_top < 0)) or ((min_bottom >= 0) and (min_top >= 0)):
-        rows = int(round(abs(min_top) - abs(min_bottom) / cell_size))
+        rows = int(round((abs(min_top) - abs(min_bottom)) / cell_size))
     else:
         rows = int(round((abs(min_top) + abs(min_bottom)) / cell_size))
 
