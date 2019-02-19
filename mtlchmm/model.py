@@ -7,7 +7,7 @@ from __future__ import division
 from builtins import int
 
 import os
-import multiprocessing as multi
+from copy import copy
 import ctypes
 
 from .errors import logger
@@ -167,6 +167,40 @@ def viterbi():
     return
 
 
+def _get_min_extent(image_list):
+
+    min_left = -1e9
+    min_right = 1e9
+    min_top = 1e9
+    min_bottom = -1e9
+
+    for im in image_list:
+
+        with raster_tools.ropen(im) as src:
+
+            min_left = max(min_left, src.left)
+            min_right = min(min_right, src.right)
+            min_top = min(min_top, src.top)
+            min_bottom = max(min_bottom, src.bottom)
+
+            cell_size = src.cellY
+            n_layers = src.bands
+
+        src = None
+
+    if ((min_left < 0) and (min_right < 0)) or ((min_left >= 0) and (min_right >= 0)):
+        columns = int(round(abs(min_right) - abs(min_left) / cell_size))
+    else:
+        columns = int(round((abs(min_right) + abs(min_left)) / cell_size))
+
+    if ((min_bottom < 0) and (min_top < 0)) or ((min_bottom >= 0) and (min_top >= 0)):
+        rows = int(round(abs(min_top) - abs(min_bottom) / cell_size))
+    else:
+        rows = int(round((abs(min_top) + abs(min_bottom)) / cell_size))
+
+    return min_left, min_bottom, min_right, min_top, cell_size, n_layers, rows, columns
+
+
 class ModelHMM(object):
 
     """A class for Hidden Markov Models"""
@@ -193,14 +227,7 @@ class ModelHMM(object):
         self.lc_probabilities = lc_probabilities
         self.n_steps = len(self.lc_probabilities)
 
-        # Get image information.
-        with raster_tools.ropen(self.lc_probabilities[0]) as i_info:
-
-            self.n_labels = i_info.bands
-            self.rows = i_info.rows
-            self.cols = i_info.cols
-
-        i_info = None
+        self.left, self.bottom, self.right, self.top, self.cell_size, self.n_labels, self.rows, self.cols = _get_min_extent(self.lc_probabilities)
 
         if not isinstance(self.n_labels, int):
 
@@ -266,6 +293,13 @@ class ModelHMM(object):
 
                 o_info = image_info.copy()
 
+                o_info.update_info(rows=self.rows,
+                                   cols=self.cols,
+                                   left=self.left,
+                                   top=self.top,
+                                   right=self.right,
+                                   bottom=self.bottom)
+
                 if self.assign_class:
 
                     o_info.update_info(storage='byte',
@@ -289,9 +323,13 @@ class ModelHMM(object):
 
             label_ones = np.ones(self.n_labels, dtype='float32')
 
+        top_ = copy(self.top)
+
         for i in range(0, self.rows, self.block_size):
 
             n_rows = raster_tools.n_rows_cols(i, self.block_size, self.rows)
+
+            left_ = copy(self.left)
 
             for j in range(0, self.cols, self.block_size):
 
@@ -316,8 +354,8 @@ class ModelHMM(object):
                 for step in range(0, self.n_steps):
 
                     step_array = self.image_infos[step].read(bands2open=-1,
-                                                             i=i,
-                                                             j=j,
+                                                             y=top_,
+                                                             x=left_,
                                                              rows=n_rows,
                                                              cols=n_cols,
                                                              d_type='float32')
@@ -415,6 +453,10 @@ class ModelHMM(object):
 
                     with open(hmm_block_tracker, 'wb') as btxt:
                         btxt.write('complete')
+
+                left_ += (n_cols * self.cell_size)
+
+            top_ -= (n_rows * self.cell_size)
 
         self.close()
 
