@@ -54,9 +54,7 @@ def _forward(time_series, fc):
     fc[0] = time_series[0]
 
     for t in range(1, n_steps):
-
-        v = time_series[t] * transition_matrix.dot(fc[t-1])
-        fc[t] = normalize(v)
+        fc[t] = normalize(time_series[t] * transition_matrix.dot(fc[t-1]))
 
     return fc
 
@@ -64,12 +62,10 @@ def _forward(time_series, fc):
 def _backward(time_series, bc):
 
     # Initial probability
-    bc[n_steps-1] = 1
+    bc[n_steps-1] = 1.0
 
     for t in range(n_steps-1, 0, -1):
-
-        v = np.dot(transition_matrix, (time_series[t] * bc[t]))
-        bc[t-1, :] = normalize(v)
+        bc[t-1, :] = normalize(np.dot(transition_matrix, (time_series[t] * bc[t])))
 
     return bc
 
@@ -77,10 +73,11 @@ def _backward(time_series, bc):
 def _likelihood(fc, bc):
 
     posterior = fc * bc
+
     z = posterior.sum(axis=1)
 
     # Ignore zero entries
-    posterior[posterior == 0] = 1.0
+    z[z == 0] = 1.0
 
     # Normalize
     return (posterior / z.reshape((n_steps, 1))).T
@@ -129,17 +126,13 @@ def _forward_backward(n_sample):
     forward[0, :] = time_series[0, :]
 
     for t in range(1, n_steps):
-
-        v = np.multiply(time_series[t, :], transition_matrix_t.dot(forward[t-1, :]))
-        forward[t, :] = normalize(v)
+        forward[t, :] = normalize(np.multiply(time_series[t, :], transition_matrix_t.dot(forward[t-1, :])))
 
     # Compute backward messages
     backward[n_steps-1, :] = label_ones
 
     for t in range(n_steps-1, 0, -1):
-
-        v = np.dot(transition_matrix, np.multiply(time_series[t, :], backward[t, :]))
-        backward[t-1, :] = normalize(v)
+        backward[t-1, :] = normalize(np.dot(transition_matrix, np.multiply(time_series[t, :], backward[t, :])))
 
     belief = np.multiply(forward, backward)
     Z = belief.sum(axis=1)
