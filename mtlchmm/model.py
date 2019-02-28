@@ -97,11 +97,6 @@ def forward_backward(n_sample):
     fc = _forward(time_series, fc)
     bc = _backward(time_series, bc)
 
-    print(time_series.argmax(axis=1))
-    print(_likelihood(fc, bc).T.reshape(n_steps, n_labels).shape)
-    print(_likelihood(fc, bc).T.reshape(n_steps, n_labels).argmax(axis=1))
-    print('')
-
     return _likelihood(fc, bc)
 
 
