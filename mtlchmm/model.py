@@ -14,6 +14,7 @@ from .errors import logger
 from .pool import pooler
 
 from mpglue import raster_tools
+from mpglue.stats import _lin_interp
 
 try:
     import numpy as np
@@ -89,7 +90,11 @@ def forward_backward(n_sample):
     bc = backward.copy()
 
     # Time x Labels
+    # [t1_l1, t1_l2, ..., t1_ln]
+    # [t2_l1, t2_l2, ..., t2_ln]
     time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
+
+    time_series = _lin_interp.lin_interp(np.float32(time_series.T), 0.0).T
 
     if time_series.max() == 0:
         return time_series.T
