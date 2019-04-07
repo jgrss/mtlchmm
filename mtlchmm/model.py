@@ -396,6 +396,8 @@ class ModelHMM(object):
                                                     n_rows,
                                                     n_cols)
 
+                import pdb;pdb.set_trace()
+
                 # Reshape the results.
                 # d_stack = d_stack.reshape(self.n_steps, self.n_labels, n_rows, n_cols)
 
@@ -425,6 +427,11 @@ class ModelHMM(object):
 
                         else:
                             predictions = probabilities_argmax
+
+                        probabilities_max = hmm_sub.max(axis=0)
+                        probabilities_min = hmm_sub.min(axis=0)
+
+                        predictions[np.where((probabilities_max == 0) & (probabilities_min == 0))] = 0
 
                         out_rst.write_array(predictions,
                                             i=i,
