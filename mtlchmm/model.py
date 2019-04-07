@@ -396,8 +396,6 @@ class ModelHMM(object):
                                                     n_rows,
                                                     n_cols)
 
-                import pdb;pdb.set_trace()
-
                 # Reshape the results.
                 # d_stack = d_stack.reshape(self.n_steps, self.n_labels, n_rows, n_cols)
 
