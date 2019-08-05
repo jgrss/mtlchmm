@@ -196,6 +196,9 @@ def _get_min_extent(image_list):
     else:
         rows = int(round((abs(min_top) + abs(min_bottom)) / cell_size))
 
+    rows = abs(rows)
+    columns = abs(columns)
+
     return min_left, min_bottom, min_right, min_top, cell_size, n_layers, rows, columns
 
 
@@ -286,7 +289,7 @@ class ModelHMM(object):
                 os.remove(out_name + '.aux.xml')
 
             if os.path.isfile(out_name):
-                self.o_infos.append(raster_tools.ropen(out_name, open2read=False))
+                self.o_infos.append(raster_tools.ropen(out_name, read_only=False))
             else:
 
                 o_info = image_info.copy()
