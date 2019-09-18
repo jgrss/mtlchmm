@@ -51,7 +51,7 @@ def _forward(time_series, fc):
     Forward algorithm
 
     Args:
-        time_series (2d array): Steps x classes
+        time_series (2d array): Steps x classes.
         fc (2d array): Forward probabilities.
     """
 
@@ -70,7 +70,7 @@ def _backward(time_series, bc):
     Backward algorithm
 
     Args:
-        time_series (2d array): Steps x classes
+        time_series (2d array): Steps x classes.
         bc (2d array): Backward probabilities.
     """
 
@@ -106,7 +106,7 @@ def _likelihood(fc, bc):
 
     # Normalize and transpose
     #
-    # The real shape is [time x lables]. The data is
+    # The real shape is [time x labels]. The data is
     #   transposed for reshaping and indexing the full
     #   image array.
     return (posterior / z[:, np.newaxis]).T
