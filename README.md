@@ -83,18 +83,24 @@ Installation
 * NumPy
 * [MpGlue](https://github.com/jgrss/mpglue)
 
-### Clone the latest version
+#### Install from GitHub
 
-```bash
-git clone https://github.com/BU-LCSC/mtlchmm.git
-cd mtlchmm
-python setup.py install
+```commandline
+> pip install git+https://github.com/jgrss/mtlchmm.git
 ```
 
-### Updating
+#### Alternatively, clone the latest version
 
-```bash
-cd mtlchmm
-git pull origin master
-python setup.py install
+```commandline
+> git clone https://github.com/jgrss/mtlchmm.git
+> cd mtlchmm/
+> python setup.py install
+```
+
+#### Updating
+
+```commandline
+> cd mtlchmm/
+> git pull origin master
+> python setup.py install
 ```

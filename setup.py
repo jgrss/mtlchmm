@@ -10,11 +10,11 @@ except:
 import numpy as np
 
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 mappy_name = 'mtlchmm'
 maintainer = 'Jordan Graesser'
-maintainer_email = 'graesser@bu.edu'
+maintainer_email = ''
 description = 'Multi-temporal land cover maps with a Hidden Markov Model'
 git_url = 'https://github.com/jgrss/mtlchmm.git'
 

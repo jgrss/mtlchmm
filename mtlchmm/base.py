@@ -17,6 +17,7 @@ class MTLCHMM(ModelHMM):
                  class_list=None,
                  out_dir=None,
                  track_blocks=False,
+                 scale_factor=None,
                  **kwargs):
 
         """
@@ -36,6 +37,7 @@ class MTLCHMM(ModelHMM):
                 to max probabilities. Default is None, or assign ordered indices.
             out_dir (Optional[str]): The output directory. Default is None, or write to input directory.
             track_blocks (Optional[bool]): Whether to track block progress. Default is False.
+            scale_factor (Optional[float]): A scaling factor to apply to probabilities. Default is None.
             kwargs (Optional): Keyword arguments for `mpglue` `create_raster`.
 
         Examples:
@@ -63,6 +65,7 @@ class MTLCHMM(ModelHMM):
         self.class_list = class_list
         self.out_dir = out_dir
         self.track_blocks = track_blocks
+        self.scale_factor = scale_factor
         self.kwargs = kwargs
 
         self.lc_probabilities = None

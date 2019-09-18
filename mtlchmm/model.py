@@ -28,7 +28,7 @@ except:
     MKL_INSTALLED = False
 
 
-def normalize(v):
+def _normalize(v):
 
     """
     Normalizes a probability vector by dividing each element by the
@@ -37,10 +37,10 @@ def normalize(v):
     is <= 0.0.
     """
 
-    Z = v.sum()
+    z = v.sum()
 
-    if Z > 0:
-        return v / Z
+    if z > 0:
+        return v / z
 
     return v
 
@@ -49,29 +49,53 @@ def _forward(time_series, fc):
 
     """
     Forward algorithm
+
+    Args:
+        time_series (2d array): Steps x classes
+        fc (2d array): Forward probabilities.
     """
 
-    # Initial probability
+    # Initial probability (from predicted class posteriors of the first time step)
     fc[0] = time_series[0]
 
     for t in range(1, n_steps):
-        fc[t] = normalize(time_series[t] * transition_matrix.dot(fc[t-1]))
+        fc[t] = _normalize(time_series[t] * transition_matrix.dot(fc[t-1]))
 
     return fc
 
 
 def _backward(time_series, bc):
 
+    """
+    Backward algorithm
+
+    Args:
+        time_series (2d array): Steps x classes
+        bc (2d array): Backward probabilities.
+    """
+
     # Initial probability
-    bc[n_steps-1] = 1.0
+    # bc[n_steps-1] = 1.0 / bc.shape[1]
+    bc[n_steps-1] = time_series[-1]
 
     for t in range(n_steps-1, 0, -1):
-        bc[t-1, :] = normalize(np.dot(transition_matrix, (time_series[t] * bc[t])))
+        bc[t-1, :] = _normalize(np.dot(transition_matrix, (time_series[t] * bc[t])))
 
     return bc
 
 
 def _likelihood(fc, bc):
+
+    """
+    Likelihood function
+
+    Args:
+        fc (2d array): Forward probabilities.
+        bc (2d array): Backward probabilities.
+
+    Returns:
+        Posterior probabilities (2d array)
+    """
 
     posterior = fc * bc
 
@@ -80,8 +104,12 @@ def _likelihood(fc, bc):
     # Ignore zero entries
     z[z == 0] = 1.0
 
-    # Normalize
-    return (posterior / z.reshape((n_steps, 1))).T
+    # Normalize and transpose
+    #
+    # The real shape is [time x lables]. The data is
+    #   transposed for reshaping and indexing the full
+    #   image array.
+    return (posterior / z[:, np.newaxis]).T
 
 
 def forward_backward(n_sample):
@@ -105,53 +133,53 @@ def forward_backward(n_sample):
     return _likelihood(fc, bc)
 
 
-def _forward_backward(n_sample):
-
-    """
-    Uses the Forward/Backward algorithm to compute marginal probabilities by
-    propagating influence forward along the chain.
-
-    Args:
-        n_sample (int)
-
-    time_series (2d array): A 2d array (M x N), where M = time steps and N = class labels.
-        Each row represents one time step.
-
-    Reference:
-        For background on this algorithm see Section 17.4.2 of
-        'Machine Learning: A Probabilistic Perspective' by Kevin Murphy.
-    """
-
-    time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
-
-    if time_series.max() == 0:
-        return time_series.T
-
-    # Compute forward messages
-    forward[0, :] = time_series[0, :]
-
-    for t in range(1, n_steps):
-        forward[t, :] = normalize(np.multiply(time_series[t, :], transition_matrix_t.dot(forward[t-1, :])))
-
-    # Compute backward messages
-    backward[n_steps-1, :] = label_ones
-
-    for t in range(n_steps-1, 0, -1):
-        backward[t-1, :] = normalize(np.dot(transition_matrix, np.multiply(time_series[t, :], backward[t, :])))
-
-    belief = np.multiply(forward, backward)
-    Z = belief.sum(axis=1)
-
-    # Ignore zero entries
-    Z[Z == 0] = 1.0
-
-    # Normalize
-    belief /= Z.reshape((n_steps, 1))
-
-    # Return belief as flattened vector
-    # d_stack[n_sample::n_samples] = belief.ravel()
-
-    return belief.T
+# def _forward_backward(n_sample):
+#
+#     """
+#     Uses the Forward/Backward algorithm to compute marginal probabilities by
+#     propagating influence forward along the chain.
+#
+#     Args:
+#         n_sample (int)
+#
+#     time_series (2d array): A 2d array (M x N), where M = time steps and N = class labels.
+#         Each row represents one time step.
+#
+#     Reference:
+#         For background on this algorithm see Section 17.4.2 of
+#         'Machine Learning: A Probabilistic Perspective' by Kevin Murphy.
+#     """
+#
+#     time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
+#
+#     if time_series.max() == 0:
+#         return time_series.T
+#
+#     # Compute forward messages
+#     forward[0, :] = time_series[0, :]
+#
+#     for t in range(1, n_steps):
+#         forward[t, :] = _normalize(np.multiply(time_series[t, :], transition_matrix_t.dot(forward[t-1, :])))
+#
+#     # Compute backward messages
+#     backward[n_steps-1, :] = label_ones
+#
+#     for t in range(n_steps-1, 0, -1):
+#         backward[t-1, :] = _normalize(np.dot(transition_matrix, np.multiply(time_series[t, :], backward[t, :])))
+#
+#     belief = np.multiply(forward, backward)
+#     Z = belief.sum(axis=1)
+#
+#     # Ignore zero entries
+#     Z[Z == 0] = 1.0
+#
+#     # Normalize
+#     belief /= Z.reshape((n_steps, 1))
+#
+#     # Return belief as flattened vector
+#     # d_stack[n_sample::n_samples] = belief.ravel()
+#
+#     return belief.T
 
 
 # TODO
@@ -354,16 +382,18 @@ class ModelHMM(object):
                 #   *all time steps + all probability layers @ 1 pixel = d_stack[:, :, 0, 0]
                 for step in range(0, self.n_steps):
 
-                    step_array = self.image_infos[step].read(bands2open=-1,
+                    # Read all the bands for the current time step.
+                    step_array = self.image_infos[step].read(bands=-1,
                                                              y=top_,
                                                              x=left_,
                                                              rows=n_rows,
                                                              cols=n_cols,
                                                              d_type='float32')
 
-                    # step_array /= step_array.max(axis=0)
-
                     step_array[np.isnan(step_array) | np.isinf(step_array)] = 0
+
+                    if isinstance(self.scale_factor, float):
+                        step_array *= self.scale_factor
 
                     block_max = max(block_max, step_array.max())
 
