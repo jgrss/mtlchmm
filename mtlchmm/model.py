@@ -449,12 +449,12 @@ class ModelHMM(object):
 
                         probabilities_argmax = hmm_sub.argmax(axis=0)
 
-                        if isinstance(self.class_list, list):
+                        if isinstance(self.class_list, list) or isinstance(self.class_list, np.ndarray):
 
                             predictions = np.zeros(probabilities_argmax.shape, dtype='uint8')
 
-                            for class_index, real_class in enumerate(self.class_list):
-                                predictions[probabilities_argmax == class_index] = real_class
+                            for class_index in range(0, len(self.class_list)):
+                                predictions[probabilities_argmax == class_index] = self.class_list[class_index]
 
                         else:
                             predictions = probabilities_argmax
