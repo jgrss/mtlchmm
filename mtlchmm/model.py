@@ -99,17 +99,19 @@ def _likelihood(fc, bc):
 
     posterior = fc * bc
 
-    z = posterior.sum(axis=1)
+    posterior[posterior == 0] = 0.0001
+
+    z = posterior.sum(axis=1)[:, np.newaxis]
 
     # Ignore zero entries
-    z[z == 0] = 1.0
+    # z[z == 0] = 1.0
 
     # Normalize and transpose
     #
     # The real shape is [time x labels]. The data is
     #   transposed for reshaping and indexing the full
     #   image array.
-    return (posterior / z[:, np.newaxis]).T
+    return (posterior / z).T
 
 
 def forward_backward(n_sample):

@@ -10,7 +10,7 @@ except:
 import numpy as np
 
 
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 mappy_name = 'mtlchmm'
 maintainer = 'Jordan Graesser'
