@@ -218,7 +218,7 @@ def _get_min_extent(image_list):
 
     for im in image_list:
 
-        with rio.open(im, mode='r') as src:
+        with rio.open(im) as src:
 
             min_left = max(min_left, src.bounds.left)
             min_right = min(min_right, src.bounds.right)
@@ -313,10 +313,10 @@ class ModelHMM(object):
 
             dtype = 'float32'
 
-            with rio.open(self.lc_probabilities[0], mode='r') as src:
+            with rio.open(self.lc_probabilities[0]) as src:
                 bands = src.count
 
-        with rio.open(self.lc_probabilities[0], mode='r') as src:
+        with rio.open(self.lc_probabilities[0]) as src:
 
             self.name_info = RInfo(dtype=dtype,
                                    bands=bands,
@@ -383,7 +383,7 @@ class ModelHMM(object):
                 for step in range(0, self.n_steps):
 
                     # Read all the bands for the current time step.
-                    with rio.open(self.lc_probabilities[step], mode='r') as src:
+                    with rio.open(self.lc_probabilities[step]) as src:
 
                         step_array = src.read(window=w,
                                               out_dtype='float32')
@@ -425,7 +425,7 @@ class ModelHMM(object):
                 for step in range(0, self.n_steps):
 
                     with rio.open(self.out_names[step],
-                                  mode='w+',
+                                  mode='r+',
                                   height=self.rows,
                                   width=self.cols,
                                   count=self.name_info.bands,
