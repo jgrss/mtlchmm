@@ -424,8 +424,10 @@ class ModelHMM(object):
                 # Iterate over each time step.
                 for step in range(0, self.n_steps):
 
+                    io_mode = 'r+' if os.path.isfile(self.out_names[step]) else 'w'
+
                     with rio.open(self.out_names[step],
-                                  mode='r+',
+                                  mode=io_mode,
                                   height=self.rows,
                                   width=self.cols,
                                   count=self.name_info.bands,
