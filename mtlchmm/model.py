@@ -9,23 +9,20 @@ from builtins import int
 import os
 from copy import copy
 import ctypes
+import multiprocessing as multi
+from collections import namedtuple
 
 from .errors import logger
-from .pool import pooler
 
-from mpglue import raster_tools
-from mpglue.stats import _lin_interp, _rolling_stats
-
-try:
-    import numpy as np
-except ImportError:
-    raise ImportError('NumPy must be installed')
+import numpy as np
+import rasterio as rio
+from rasterio.windows import Window
+from affine import Affine
 
 try:
-    mkl_rt = ctypes.CDLL('libmkl_rt.so')
-    MKL_INSTALLED = True
+    MKL_LIB = ctypes.CDLL('libmkl_rt.so')
 except:
-    MKL_INSTALLED = False
+    MKL_LIB = None
 
 
 def _normalize(v):
@@ -195,6 +192,23 @@ def viterbi():
     return
 
 
+def n_rows_cols(pixel_index, block_size, rows_cols):
+
+    """
+    Adjusts block size for the end of image rows and columns.
+
+    Args:
+        pixel_index (int): The current pixel row or column index.
+        block_size (int): The image block size.
+        rows_cols (int): The total number of rows or columns in the image.
+
+    Returns:
+        Adjusted block size as int.
+    """
+
+    return block_size if (pixel_index + block_size) < rows_cols else rows_cols - pixel_index
+
+
 def _get_min_extent(image_list):
 
     min_left = -1e9
@@ -204,17 +218,15 @@ def _get_min_extent(image_list):
 
     for im in image_list:
 
-        with raster_tools.ropen(im) as src:
+        with rio.open(im, mode='r') as src:
 
-            min_left = max(min_left, src.left)
-            min_right = min(min_right, src.right)
-            min_top = min(min_top, src.top)
-            min_bottom = max(min_bottom, src.bottom)
+            min_left = max(min_left, src.bounds.left)
+            min_right = min(min_right, src.bounds.right)
+            min_top = min(min_top, src.bounds.top)
+            min_bottom = max(min_bottom, src.bounds.bottom)
 
-            cell_size = src.cellY
-            n_layers = src.bands
-
-        src = None
+            cell_size = src.res[0]
+            n_layers = src.count
 
     if ((min_left < 0) and (min_right < 0)) or ((min_left >= 0) and (min_right >= 0)):
         columns = int(round((abs(min_right) - abs(min_left)) / cell_size))
@@ -252,8 +264,8 @@ class ModelHMM(object):
             logger.error('The `fit` method cannot be executed without data.')
             raise ValueError
 
-        if MKL_INSTALLED:
-            n_threads_ = mkl_rt.MKL_Set_Num_Threads(self.n_jobs)
+        if MKL_LIB:
+            n_threads_ = MKL_LIB.MKL_Set_Num_Threads(self.n_jobs)
 
         self.lc_probabilities = lc_probabilities
         self.n_steps = len(self.lc_probabilities)
@@ -281,64 +293,52 @@ class ModelHMM(object):
         self.methods = {'forward-backward': forward_backward,
                         'viterbi': viterbi}
 
-        # Open the images.
-        self.image_infos = [raster_tools.ropen(image) for image in self.lc_probabilities]
-
-        self._setup_out_infos(**self.kwargs)
+        self._create_names()
 
         # Iterate over the image block by block.
         self._block_func()
 
-    def _setup_out_infos(self, **kwargs):
+    def _create_names(self):
 
-        """
-        Creates the output image information objects
-        """
+        RInfo = namedtuple('RInfo', 'dtype bands crs transform')
 
-        if isinstance(self.out_dir, str):
+        self.out_names = list()
 
-            if not os.path.isdir(self.out_dir):
-                os.makedirs(self.out_dir)
+        if self.assign_class:
 
-        self.o_infos = list()
+            dtype = 'uint8'
+            bands = 1
 
-        for image_info in self.image_infos:
+        else:
 
-            d_name, f_name = os.path.split(image_info.file_name)
+            dtype = 'float32'
+
+            with rio.open(self.lc_probabilities[0], mode='r') as src:
+                bands = src.count
+
+        with rio.open(self.lc_probabilities[0], mode='r') as src:
+
+            self.name_info = RInfo(dtype=dtype,
+                                   bands=bands,
+                                   crs=src.crs,
+                                   transform=Affine.from_gdal(*src.read_transform()))
+
+        for fn in self.lc_probabilities:
+
+            d_name, f_name = os.path.split(fn)
             f_base, f_ext = os.path.splitext(f_name)
 
-            if isinstance(self.out_dir, str):
-                d_name = self.out_dir
+            out_name = os.path.join(self.out_dir, '{}_hmm{}'.format(f_base, f_ext))
 
-            out_name = os.path.join(d_name, '{}_hmm{}'.format(f_base, f_ext))
-
-            if os.path.isfile(out_name + '.ovr'):
-                os.remove(out_name + '.ovr')
-
-            if os.path.isfile(out_name + '.aux.xml'):
-                os.remove(out_name + '.aux.xml')
-
-            if os.path.isfile(out_name):
-                self.o_infos.append(raster_tools.ropen(out_name, read_only=False))
-            else:
-
-                o_info = image_info.copy()
-
-                o_info.update_info(rows=self.rows,
-                                   cols=self.cols,
-                                   left=self.left,
-                                   top=self.top,
-                                   right=self.right,
-                                   bottom=self.bottom)
-
-                if self.assign_class:
-
-                    o_info.update_info(storage='byte',
-                                       bands=1)
-
-                self.o_infos.append(raster_tools.create_raster(out_name, o_info, **kwargs))
+            self.out_names.append(out_name)
 
         self.out_blocks = os.path.join(d_name, 'hmm_BLOCK.txt')
+
+        if not isinstance(self.out_dir, str):
+            self.out_dir = d_name
+
+        if not os.path.isdir(self.out_dir):
+            os.makedirs(self.out_dir)
 
     def _block_func(self):
 
@@ -354,13 +354,9 @@ class ModelHMM(object):
 
             label_ones = np.ones(self.n_labels, dtype='float32')
 
-        top_ = copy(self.top)
-
         for i in range(0, self.rows, self.block_size):
 
-            n_rows = raster_tools.n_rows_cols(i, self.block_size, self.rows)
-
-            left_ = copy(self.left)
+            n_rows = n_rows_cols(i, self.block_size, self.rows)
 
             for j in range(0, self.cols, self.block_size):
 
@@ -369,7 +365,9 @@ class ModelHMM(object):
                 if os.path.isfile(hmm_block_tracker):
                     continue
 
-                n_cols = raster_tools.n_rows_cols(j, self.block_size, self.cols)
+                n_cols = n_rows_cols(j, self.block_size, self.cols)
+
+                w = Window(col_off=j, row_off=i, width=n_cols, height=n_rows)
 
                 # Total samples in the block.
                 n_samples = n_rows * n_cols
@@ -385,12 +383,10 @@ class ModelHMM(object):
                 for step in range(0, self.n_steps):
 
                     # Read all the bands for the current time step.
-                    step_array = self.image_infos[step].read(bands=-1,
-                                                             y=top_,
-                                                             x=left_,
-                                                             rows=n_rows,
-                                                             cols=n_cols,
-                                                             d_type='float32')
+                    with rio.open(self.lc_probabilities[step], mode='r') as src:
+
+                        step_array = src.read(window=w,
+                                              out_dtype='float32')
 
                     step_array[np.isnan(step_array) | np.isinf(step_array)] = 0
 
@@ -414,107 +410,66 @@ class ModelHMM(object):
                 #   K is the number of labels.
                 #
                 # Therefore, each row represents one time step.
-                with pooler(processes=self.n_jobs) as pool:
+                with multi.Pool(processes=self.n_jobs) as pool:
                     hmm_results = np.array(pool.map(self.methods[self.method], range(0, n_samples)), dtype='float32')
 
-                # hmm_results = np.array(map(self.methods[self.method], range(0, 10)), dtype='float32')
-
-                # Parallel(n_jobs=self.n_jobs,
-                #          max_nbytes=None)(delayed(self.methods[self.method])(n_sample,
-                #                                                              n_samples,
-                #                                                              self.n_steps,
-                #                                                              self.n_labels)
-                #                           for n_sample in range(0, n_samples))
-
+                # Reshape the results.
                 hmm_results = hmm_results.T.reshape(self.n_steps,
                                                     self.n_labels,
                                                     n_rows,
                                                     n_cols)
-
-                # Reshape the results.
-                # d_stack = d_stack.reshape(self.n_steps, self.n_labels, n_rows, n_cols)
 
                 # Write the block results to file.
 
                 # Iterate over each time step.
                 for step in range(0, self.n_steps):
 
-                    # Get the image for the
-                    #   current time step.
-                    out_rst = self.o_infos[step]
+                    with rio.open(self.out_names[step],
+                                  mode='w+',
+                                  height=self.rows,
+                                  width=self.cols,
+                                  count=self.name_info.bands,
+                                  dtype=self.name_info.dtype,
+                                  driver=self.driver,
+                                  crs=self.name_info.crs,
+                                  transform=self.name_info.transform,
+                                  **self.kwargs) as dst:
 
-                    # Get the array for the
-                    #   current time step.
-                    hmm_sub = hmm_results[step]
+                        # Get the array for the
+                        #   current time step.
+                        hmm_sub = hmm_results[step]
 
-                    if self.assign_class:
+                        if self.assign_class:
 
-                        probabilities_argmax = hmm_sub.argmax(axis=0)
+                            probabilities_argmax = hmm_sub.argmax(axis=0)
 
-                        if isinstance(self.class_list, list) or isinstance(self.class_list, np.ndarray):
+                            if isinstance(self.class_list, list) or isinstance(self.class_list, np.ndarray):
 
-                            predictions = np.zeros(probabilities_argmax.shape, dtype='uint8')
+                                predictions = np.zeros(probabilities_argmax.shape, dtype='uint8')
 
-                            for class_index in range(0, len(self.class_list)):
-                                predictions[probabilities_argmax == class_index] = self.class_list[class_index]
+                                for class_index in range(0, len(self.class_list)):
+                                    predictions[probabilities_argmax == class_index] = self.class_list[class_index]
+
+                            else:
+                                predictions = probabilities_argmax
+
+                            predictions[hmm_sub.max(axis=0) == 0] = 0
+
+                            dst.write(predictions,
+                                      window=w,
+                                      indexes=1)
 
                         else:
-                            predictions = probabilities_argmax
 
-                        probabilities_max = hmm_sub.max(axis=0)
-                        probabilities_min = hmm_sub.min(axis=0)
-
-                        predictions[np.where((probabilities_max == 0) & (probabilities_min == 0))] = 0
-
-                        out_rst.write_array(predictions,
-                                            i=i,
-                                            j=j,
-                                            band=1)
-
-                        out_rst.close_band()
-
-                    else:
-
-                        # Iterate over each probability layer.
-                        for layer in range(0, self.n_labels):
-
-                            # Write the block for the
-                            #   current probability layer.
-                            out_rst.write_array(hmm_sub[layer],
-                                                i=i,
-                                                j=j,
-                                                band=layer+1)
-
-                            out_rst.close_band()
+                            # Write the probability layers.
+                            dst.write(hmm_sub,
+                                      window=w,
+                                      indexes=list(range(1, self.n_labels+1)))
 
                 if self.track_blocks:
 
                     with open(hmm_block_tracker, 'wb') as btxt:
-                        btxt.write('complete')
-
-                left_ += (n_cols * self.cell_size)
-
-            top_ -= (n_rows * self.cell_size)
-
-        self.close()
-
-        out_rst = None
-
-    def close(self):
-
-        for i_info in self.image_infos:
-
-            i_info.close()
-            i_info = None
-
-        self.image_infos = None
-
-        for o_info in self.o_infos:
-
-            o_info.close_file()
-            o_info = None
-
-        self.o_infos = None
+                        btxt.write(b'complete')
 
     def _transition_matrix(self):
 

@@ -10,7 +10,7 @@ except:
 import numpy as np
 
 
-__version__ = '0.0.6'
+__version__ = '0.1.0'
 
 mappy_name = 'mtlchmm'
 maintainer = 'Jordan Graesser'
@@ -27,8 +27,9 @@ with open('LICENSE.txt') as f:
 with open('AUTHORS.txt') as f:
     author_file = f.read()
 
-required_packages = ['joblib>=0.11.0',
-                     'numpy>=1.13']
+required_packages = ['numpy',
+                     'rasterio',
+                     'affine']
 
 
 def get_packages():

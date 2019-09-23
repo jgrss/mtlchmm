@@ -1,3 +1,9 @@
+[](#mit-license)[](#python-3.6)[](#package-version)
+
+[![MIT license](https://img.shields.io/badge/License-MIT-black.svg)](https://lbesson.mit-license.org/)
+[![Python 3.6](https://img.shields.io/badge/python-3.6-black.svg)](https://www.python.org/downloads/release/python-360/)
+![Package version](https://img.shields.io/badge/version-0.1.0-blue.svg?cacheSeconds=2592000)
+
 Multi-temporal land cover maps with a Hidden Markov Model (MTLCHMM)
 ---
 
@@ -13,6 +19,10 @@ between the two have been conducted).
 > Abercrombie, S Parker and Friedl, Mark A (2016) [Improving the Consistency of Multitemporal Land
 Cover Maps Using a Hidden Markov Model](https://ieeexplore.ieee.org/document/7254169/). _IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING_, 54(2), 703--713.
 
+## New in `v. 0.1.0`
+
+* Image I/O is now handled with [`Rasterio`](https://rasterio.readthedocs.io/en/stable/).
+
 ### Usage
 
 ```python
@@ -20,7 +30,12 @@ Cover Maps Using a Hidden Markov Model](https://ieeexplore.ieee.org/document/725
 >>>
 >>> hmm_model = mtlchmm.MTLCHMM(method='forward-backward', 
 >>>                             transition_prior=0.1,
->>>                             n_jobs=-1)
+>>>                             block_size=512,
+>>>                             n_jobs=-1,
+>>>                             tiled=True,
+>>>                             blockxsize=512,
+>>>                             blockysize=512,
+>>>                             compress='lzw')
 >>>
 >>> hmm_model.fit_predict(['lc_probas_yr01.tif', 
 >>>                        'lc_probas_yr02.tif',
@@ -81,7 +96,7 @@ Installation
 ### Dependencies
 
 * NumPy
-* [MpGlue](https://github.com/jgrss/mpglue)
+* Rasterio
 
 #### Install from GitHub
 
