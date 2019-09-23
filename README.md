@@ -19,7 +19,7 @@ between the two have been conducted).
 > Abercrombie, S Parker and Friedl, Mark A (2016) [Improving the Consistency of Multitemporal Land
 Cover Maps Using a Hidden Markov Model](https://ieeexplore.ieee.org/document/7254169/). _IEEE TRANSACTIONS ON GEOSCIENCE AND REMOTE SENSING_, 54(2), 703--713.
 
-## New in v.`0.1.0`:
+## New in v. 0.1.0:
 
 * Image I/O is now handled with [`Rasterio`](https://rasterio.readthedocs.io/en/stable/).
 
