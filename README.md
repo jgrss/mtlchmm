@@ -2,7 +2,7 @@
 
 [![MIT license](https://img.shields.io/badge/License-MIT-black.svg)](https://lbesson.mit-license.org/)
 [![Python 3.6](https://img.shields.io/badge/python-3.6-black.svg)](https://www.python.org/downloads/release/python-360/)
-![Package version](https://img.shields.io/badge/version-0.1.1-blue.svg?cacheSeconds=2592000)
+![Package version](https://img.shields.io/badge/version-0.1.2-blue.svg?cacheSeconds=2592000)
 
 Multi-temporal land cover maps with a Hidden Markov Model (MTLCHMM)
 ---
@@ -30,6 +30,7 @@ Cover Maps Using a Hidden Markov Model](https://ieeexplore.ieee.org/document/725
 >>>
 >>> hmm_model = mtlchmm.MTLCHMM(method='forward-backward', 
 >>>                             transition_prior=0.1,
+>>>                             out_dir='hmm',
 >>>                             block_size=512,
 >>>                             n_jobs=-1,
 >>>                             tiled=True,
