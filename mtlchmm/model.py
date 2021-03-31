@@ -7,10 +7,10 @@ from __future__ import division
 from builtins import int
 
 import os
-from copy import copy
 import ctypes
-import multiprocessing as multi
 from collections import namedtuple
+import concurrent.futures
+import warnings
 
 from .errors import logger
 
@@ -18,11 +18,15 @@ import numpy as np
 import rasterio as rio
 from rasterio.windows import Window
 from affine import Affine
+from tqdm import tqdm
 
 try:
     MKL_LIB = ctypes.CDLL('libmkl_rt.so')
 except:
     MKL_LIB = None
+
+
+warnings.filterwarnings('ignore')
 
 
 def _normalize(v):
@@ -34,6 +38,8 @@ def _normalize(v):
     is <= 0.0.
     """
 
+    v[np.isnan(v) | np.isinf(v)] = 0
+
     z = v.sum()
 
     if z > 0:
@@ -42,7 +48,7 @@ def _normalize(v):
     return v
 
 
-def _forward(time_series, fc):
+def _forward(time_series, fc, n_steps, transition_matrix):
 
     """
     Forward algorithm
@@ -61,7 +67,7 @@ def _forward(time_series, fc):
     return fc
 
 
-def _backward(time_series, bc):
+def _backward(time_series, bc, n_steps, transition_matrix):
 
     """
     Backward algorithm
@@ -111,23 +117,31 @@ def _likelihood(fc, bc):
     return (posterior / z).T
 
 
-def forward_backward(n_sample):
+def forward_backward(time_series, n_steps, n_labels, transition_matrix):
 
-    fc = forward.copy()
-    bc = backward.copy()
+    time_series[np.isnan(time_series) | np.isinf(time_series)] = 0
+
+    # fc = forward.copy()
+    # bc = backward.copy()
+
+    fc = np.zeros((n_steps, n_labels), dtype='float32')
+    bc = np.zeros((n_steps, n_labels), dtype='float32')
 
     # Time x Labels
     # [t1_l1, t1_l2, ..., t1_ln]
     # [t2_l1, t2_l2, ..., t2_ln]
-    time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
+    # time_series = d_stack[n_sample::n_samples].reshape(n_steps, n_labels)
 
     # time_series = _lin_interp.lin_interp(np.float32(time_series.T), 0.0)
 
     if time_series.max() == 0:
         return time_series.T
 
-    fc = _forward(time_series, fc)
-    bc = _backward(time_series, bc)
+    fc = _forward(time_series, fc, n_steps, transition_matrix)
+    bc = _backward(time_series, bc, n_steps, transition_matrix)
+
+    fc[np.isnan(fc) | np.isinf(fc)] = 0
+    bc[np.isnan(bc) | np.isinf(bc)] = 0
 
     return _likelihood(fc, bc)
 
@@ -288,7 +302,7 @@ class ModelHMM(object):
             raise TypeError
 
         # Setup the transition matrix.
-        self._transition_matrix()
+        self.transition_matrix = self._transition_matrix()
 
         self.methods = {'forward-backward': forward_backward,
                         'viterbi': viterbi}
@@ -328,31 +342,29 @@ class ModelHMM(object):
             d_name, f_name = os.path.split(fn)
             f_base, f_ext = os.path.splitext(f_name)
 
+            if not isinstance(self.out_dir, str):
+                raise OSError('The output directory must be specified.')
+
+            if self.out_dir == d_name:
+                raise NameError('The output directory must be different than the input directory.')
+
             out_name = os.path.join(self.out_dir, '{}_hmm{}'.format(f_base, f_ext))
 
             self.out_names.append(out_name)
 
         self.out_blocks = os.path.join(d_name, 'hmm_BLOCK.txt')
 
-        if not isinstance(self.out_dir, str):
-            self.out_dir = d_name
-
         if not os.path.isdir(self.out_dir):
             os.makedirs(self.out_dir)
 
     def _block_func(self):
 
-        global d_stack, forward, backward, label_ones, n_samples, n_steps, n_labels
-
-        n_steps = self.n_steps
-        n_labels = self.n_labels
-
-        if self.method == 'forward-backward':
-
-            forward = np.empty((self.n_steps, self.n_labels), dtype='float32')
-            backward = np.empty((self.n_steps, self.n_labels), dtype='float32')
-
-            label_ones = np.ones(self.n_labels, dtype='float32')
+        # if self.method == 'forward-backward':
+        #
+        #     forward = np.empty((self.n_steps, self.n_labels), dtype='float32')
+        #     backward = np.empty((self.n_steps, self.n_labels), dtype='float32')
+        #
+        #     label_ones = np.ones(self.n_labels, dtype='float32')
 
         for i in range(0, self.rows, self.block_size):
 
@@ -367,14 +379,19 @@ class ModelHMM(object):
 
                 n_cols = n_rows_cols(j, self.block_size, self.cols)
 
-                w = Window(col_off=j, row_off=i, width=n_cols, height=n_rows)
+                wread = Window(col_off=j-1 if j-1 >= 0 else 0,
+                               row_off=i-1 if i-1 >= 0 else 0,
+                               width=n_cols+1 if n_cols+1 < self.cols else n_cols,
+                               height=n_rows+1 if n_rows+1 < self.rows else n_rows)
+
+                wwrite = Window(col_off=j, row_off=i, width=n_cols, height=n_rows)
 
                 # Total samples in the block.
-                n_samples = n_rows * n_cols
+                n_samples = wread.height * wread.width
 
                 # Setup the block stack.
                 # time steps x class layers x rows x columns
-                d_stack = np.empty((self.n_steps, self.n_labels, n_rows, n_cols), dtype='float32')
+                d_stack = np.empty((self.n_steps, self.n_labels, wread.height, wread.width), dtype='float32')
 
                 block_max = 0
 
@@ -385,7 +402,7 @@ class ModelHMM(object):
                     # Read all the bands for the current time step.
                     with rio.open(self.lc_probabilities[step]) as src:
 
-                        step_array = src.read(window=w,
+                        step_array = src.read(window=wread,
                                               out_dtype='float32')
 
                     step_array[np.isnan(step_array) | np.isinf(step_array)] = 0
@@ -402,6 +419,8 @@ class ModelHMM(object):
 
                 d_stack = d_stack.ravel()
 
+                hmm_results = []
+
                 # Process each pixel, getting 1
                 #   pixel for all time steps.
                 #
@@ -410,14 +429,29 @@ class ModelHMM(object):
                 #   K is the number of labels.
                 #
                 # Therefore, each row represents one time step.
-                with multi.Pool(processes=self.n_jobs) as pool:
-                    hmm_results = np.array(pool.map(self.methods[self.method], range(0, n_samples)), dtype='float32')
+                with concurrent.futures.ProcessPoolExecutor(max_workers=self.n_jobs) as executor:
+
+                    futures = [executor.submit(self.methods[self.method],
+                                               d_stack[n_sample::n_samples].reshape(self.n_steps, self.n_labels),
+                                               self.n_steps,
+                                               self.n_labels,
+                                               self.transition_matrix) for n_sample in range(0, n_samples)]
+
+                    for f in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
+                        hmm_results.append(f.result())
+
+                hmm_results = np.array(hmm_results, dtype='float32')
+
+                slicer = (slice(0, None),
+                          slice(0, None),
+                          slice(wwrite.row_off-wread.row_off, wwrite.height),
+                          slice(wwrite.col_off-wread.col_off, wwrite.width))
 
                 # Reshape the results.
                 hmm_results = hmm_results.T.reshape(self.n_steps,
                                                     self.n_labels,
-                                                    n_rows,
-                                                    n_cols)
+                                                    wread.height,
+                                                    wread.width)[slicer]
 
                 # Write the block results to file.
 
@@ -458,14 +492,14 @@ class ModelHMM(object):
                             predictions[hmm_sub.max(axis=0) == 0] = 0
 
                             dst.write(predictions,
-                                      window=w,
+                                      window=wwrite,
                                       indexes=1)
 
                         else:
 
                             # Write the probability layers.
                             dst.write(hmm_sub,
-                                      window=w,
+                                      window=wwrite,
                                       indexes=list(range(1, self.n_labels+1)))
 
                 if self.track_blocks:
@@ -479,8 +513,6 @@ class ModelHMM(object):
         Constructs the transition matrix
         """
 
-        global transition_matrix, transition_matrix_t
-
         if isinstance(self.transition_prior, np.ndarray):
             transition_matrix = self.transition_prior
         else:
@@ -489,4 +521,6 @@ class ModelHMM(object):
             transition_matrix.fill(self.transition_prior)
             np.fill_diagonal(transition_matrix, 1.0 - self.transition_prior)
 
-        transition_matrix_t = transition_matrix.T
+        # transition_matrix_t = transition_matrix.T
+
+        return transition_matrix
