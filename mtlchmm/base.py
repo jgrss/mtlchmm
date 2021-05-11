@@ -18,6 +18,7 @@ class MTLCHMM(ModelHMM):
                 `transition_prior` is a 2d array, the class transitions are treated separately.
 
         n_jobs (Optional[int]): The number of parallel jobs. Default is 1.
+        chunksize (Optional[int]): The `concurrent.futures` Process Pool map chunk size.
         block_size (Optional[int]): The block size for in-memory processing. Default is 2000.
         assign_class (Optional[bool]): Whether to assign the class value with the maximum probability.
             Default is False.
@@ -45,6 +46,7 @@ class MTLCHMM(ModelHMM):
                  method='forward-backward',
                  transition_prior=0.1,
                  n_jobs=1,
+                 chunksize=10,
                  block_size=2000,
                  assign_class=False,
                  class_list=None,
@@ -62,6 +64,7 @@ class MTLCHMM(ModelHMM):
         self.method = method
         self.transition_prior = transition_prior
         self.n_jobs = multi.cpu_count() if n_jobs == -1 else n_jobs
+        self.chunksize = chunksize
         self.block_size = int(block_size)
         self.assign_class = assign_class
         self.class_list = class_list

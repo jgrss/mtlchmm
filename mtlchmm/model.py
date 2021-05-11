@@ -7,6 +7,7 @@ from __future__ import division
 from builtins import int
 
 import os
+import itertools
 import ctypes
 from collections import namedtuple
 import concurrent.futures
@@ -117,15 +118,17 @@ def _likelihood(fc, bc):
     return (posterior / z).T
 
 
-def forward_backward(time_series, n_steps, n_labels, transition_matrix):
+def forward_backward(*args):
+
+    time_series, n_steps, n_labels, transition_matrix = list(itertools.chain(*args))
 
     time_series[np.isnan(time_series) | np.isinf(time_series)] = 0
 
     # fc = forward.copy()
     # bc = backward.copy()
 
-    fc = np.zeros((n_steps, n_labels), dtype='float32')
-    bc = np.zeros((n_steps, n_labels), dtype='float32')
+    fc = np.zeros((n_steps, n_labels), dtype='float64')
+    bc = np.zeros((n_steps, n_labels), dtype='float64')
 
     # Time x Labels
     # [t1_l1, t1_l2, ..., t1_ln]
@@ -325,7 +328,7 @@ class ModelHMM(object):
 
         else:
 
-            dtype = 'float32'
+            dtype = 'float64'
 
             with rio.open(self.lc_probabilities[0]) as src:
                 bands = src.count
@@ -366,146 +369,159 @@ class ModelHMM(object):
         #
         #     label_ones = np.ones(self.n_labels, dtype='float32')
 
-        for i in range(0, self.rows, self.block_size):
+        row_count = int(np.ceil(self.rows / self.block_size))
+        col_count = int(np.ceil(self.cols / self.block_size))
 
-            n_rows = n_rows_cols(i, self.block_size, self.rows)
+        with tqdm(total=int(row_count*col_count)) as pbar:
 
-            for j in range(0, self.cols, self.block_size):
+            for i in range(0, self.rows, self.block_size):
 
-                hmm_block_tracker = self.out_blocks.replace('_BLOCK', '{:04d}_{:04d}'.format(i, j))
+                n_rows = n_rows_cols(i, self.block_size, self.rows)
 
-                if os.path.isfile(hmm_block_tracker):
-                    continue
+                for j in range(0, self.cols, self.block_size):
 
-                n_cols = n_rows_cols(j, self.block_size, self.cols)
+                    hmm_block_tracker = self.out_blocks.replace('_BLOCK', '{:04d}_{:04d}'.format(i, j))
 
-                wread = Window(col_off=j-1 if j-1 >= 0 else 0,
-                               row_off=i-1 if i-1 >= 0 else 0,
-                               width=n_cols+1 if n_cols+1 < self.cols else n_cols,
-                               height=n_rows+1 if n_rows+1 < self.rows else n_rows)
+                    if os.path.isfile(hmm_block_tracker):
+                        continue
 
-                wwrite = Window(col_off=j, row_off=i, width=n_cols, height=n_rows)
+                    n_cols = n_rows_cols(j, self.block_size, self.cols)
 
-                # Total samples in the block.
-                n_samples = wread.height * wread.width
+                    wread = Window(col_off=j-1 if j-1 >= 0 else 0,
+                                   row_off=i-1 if i-1 >= 0 else 0,
+                                   width=n_cols+1 if n_cols+1 < self.cols else n_cols,
+                                   height=n_rows+1 if n_rows+1 < self.rows else n_rows)
 
-                # Setup the block stack.
-                # time steps x class layers x rows x columns
-                d_stack = np.empty((self.n_steps, self.n_labels, wread.height, wread.width), dtype='float32')
+                    wwrite = Window(col_off=j, row_off=i, width=n_cols, height=n_rows)
 
-                block_max = 0
+                    # Total samples in the block.
+                    n_samples = wread.height * wread.width
 
-                # Load the block stack.
-                #   *all time steps + all probability layers @ 1 pixel = d_stack[:, :, 0, 0]
-                for step in range(0, self.n_steps):
+                    # Setup the block stack.
+                    # time steps x class layers x rows x columns
+                    d_stack = np.empty((self.n_steps, self.n_labels, wread.height, wread.width), dtype='float64')
 
-                    # Read all the bands for the current time step.
-                    with rio.open(self.lc_probabilities[step]) as src:
+                    block_max = 0
 
-                        step_array = src.read(window=wread,
-                                              out_dtype='float32')
+                    # Load the block stack.
+                    #   *all time steps + all probability layers @ 1 pixel = d_stack[:, :, 0, 0]
+                    for step in range(0, self.n_steps):
 
-                    step_array[np.isnan(step_array) | np.isinf(step_array)] = 0
+                        # Read all the bands for the current time step.
+                        with rio.open(self.lc_probabilities[step]) as src:
 
-                    if isinstance(self.scale_factor, float):
-                        step_array *= self.scale_factor
+                            step_array = src.read(window=wread,
+                                                  out_dtype='float64')
 
-                    block_max = max(block_max, step_array.max())
+                        step_array[np.isnan(step_array) | np.isinf(step_array)] = 0
 
-                    d_stack[step] = step_array
+                        if isinstance(self.scale_factor, float):
+                            step_array *= self.scale_factor
 
-                if block_max == 0:
-                    continue
+                        block_max = max(block_max, step_array.max())
 
-                d_stack = d_stack.ravel()
+                        d_stack[step] = step_array
 
-                hmm_results = []
+                    if block_max == 0:
+                        continue
 
-                # Process each pixel, getting 1
-                #   pixel for all time steps.
-                #
-                # Reshape data to a NxK matrix,
-                #   where N is number of time steps and
-                #   K is the number of labels.
-                #
-                # Therefore, each row represents one time step.
-                with concurrent.futures.ProcessPoolExecutor(max_workers=self.n_jobs) as executor:
+                    d_stack = d_stack.ravel()
 
-                    futures = [executor.submit(self.methods[self.method],
-                                               d_stack[n_sample::n_samples].reshape(self.n_steps, self.n_labels),
-                                               self.n_steps,
-                                               self.n_labels,
-                                               self.transition_matrix) for n_sample in range(0, n_samples)]
+                    data_gen = ((d_stack[n_sample::n_samples].reshape(self.n_steps, self.n_labels),
+                                 self.n_steps,
+                                 self.n_labels,
+                                 self.transition_matrix) for n_sample in range(0, n_samples))
 
-                    for f in tqdm(concurrent.futures.as_completed(futures), total=len(futures)):
-                        hmm_results.append(f.result())
+                    # Process each pixel, getting 1
+                    #   pixel for all time steps.
+                    #
+                    # Reshape data to a NxK matrix,
+                    #   where N is number of time steps and
+                    #   K is the number of labels.
+                    #
+                    # Therefore, each row represents one time step.
+                    with concurrent.futures.ProcessPoolExecutor(max_workers=self.n_jobs) as executor:
 
-                hmm_results = np.array(hmm_results, dtype='float32')
+                        hmm_results = [res for res in executor.map(self.methods[self.method],
+                                                                   data_gen,
+                                                                   chunksize=self.chunksize)]
 
-                slicer = (slice(0, None),
-                          slice(0, None),
-                          slice(wwrite.row_off-wread.row_off, wwrite.height),
-                          slice(wwrite.col_off-wread.col_off, wwrite.width))
+                    hmm_results = np.array(hmm_results, dtype='float64')
 
-                # Reshape the results.
-                hmm_results = hmm_results.T.reshape(self.n_steps,
-                                                    self.n_labels,
-                                                    wread.height,
-                                                    wread.width)[slicer]
+                    slicer = (slice(0, None),
+                              slice(0, None),
+                              slice(wwrite.row_off-wread.row_off, wwrite.height),
+                              slice(wwrite.col_off-wread.col_off, wwrite.width))
 
-                # Write the block results to file.
+                    # Reshape the results.
+                    hmm_results = hmm_results.T.reshape(self.n_steps,
+                                                        self.n_labels,
+                                                        wread.height,
+                                                        wread.width)[slicer]
 
-                # Iterate over each time step.
-                for step in range(0, self.n_steps):
+                    class_var = (hmm_results*1000.0).astype('uint16').var(axis=1)
 
-                    io_mode = 'r+' if os.path.isfile(self.out_names[step]) else 'w'
+                    var_idx = np.where(class_var == 0)
 
-                    with rio.open(self.out_names[step],
-                                  mode=io_mode,
-                                  height=self.rows,
-                                  width=self.cols,
-                                  count=self.name_info.bands,
-                                  dtype=self.name_info.dtype,
-                                  driver=self.driver,
-                                  crs=self.name_info.crs,
-                                  transform=self.name_info.transform,
-                                  **self.kwargs) as dst:
+                    if var_idx[0].shape[0] > 0:
+                        hmm_results[var_idx[0], :, var_idx[1], var_idx[2]] = -999
 
-                        # Get the array for the
-                        #   current time step.
-                        hmm_sub = hmm_results[step]
+                    # Write the block results to file.
 
-                        if self.assign_class:
+                    # Iterate over each time step.
+                    for step in range(0, self.n_steps):
 
-                            probabilities_argmax = hmm_sub.argmax(axis=0)
+                        io_mode = 'r+' if os.path.isfile(self.out_names[step]) else 'w'
 
-                            if isinstance(self.class_list, list) or isinstance(self.class_list, np.ndarray):
+                        with rio.open(self.out_names[step],
+                                      mode=io_mode,
+                                      height=self.rows,
+                                      width=self.cols,
+                                      count=self.name_info.bands,
+                                      dtype=self.name_info.dtype,
+                                      driver=self.driver,
+                                      crs=self.name_info.crs,
+                                      transform=self.name_info.transform,
+                                      nodata=-999,
+                                      **self.kwargs) as dst:
 
-                                predictions = np.zeros(probabilities_argmax.shape, dtype='uint8')
+                            # Get the array for the
+                            #   current time step.
+                            hmm_sub = hmm_results[step]
 
-                                for class_index in range(0, len(self.class_list)):
-                                    predictions[probabilities_argmax == class_index] = self.class_list[class_index]
+                            if self.assign_class:
+
+                                probabilities_argmax = hmm_sub.argmax(axis=0)
+
+                                if isinstance(self.class_list, list) or isinstance(self.class_list, np.ndarray):
+
+                                    predictions = np.zeros(probabilities_argmax.shape, dtype='uint8')
+
+                                    for class_index in range(0, len(self.class_list)):
+                                        predictions[probabilities_argmax == class_index] = self.class_list[class_index]
+
+                                else:
+                                    predictions = probabilities_argmax
+
+                                predictions[hmm_sub.max(axis=0) == 0] = 0
+
+                                dst.write(predictions,
+                                          window=wwrite,
+                                          indexes=1)
 
                             else:
-                                predictions = probabilities_argmax
 
-                            predictions[hmm_sub.max(axis=0) == 0] = 0
+                                # Write the probability layers.
+                                dst.write(hmm_sub,
+                                          window=wwrite,
+                                          indexes=list(range(1, self.n_labels+1)))
 
-                            dst.write(predictions,
-                                      window=wwrite,
-                                      indexes=1)
+                    if self.track_blocks:
 
-                        else:
+                        with open(hmm_block_tracker, 'wb') as btxt:
+                            btxt.write(b'complete')
 
-                            # Write the probability layers.
-                            dst.write(hmm_sub,
-                                      window=wwrite,
-                                      indexes=list(range(1, self.n_labels+1)))
-
-                if self.track_blocks:
-
-                    with open(hmm_block_tracker, 'wb') as btxt:
-                        btxt.write(b'complete')
+                    pbar.update(1)
 
     def _transition_matrix(self):
 
@@ -517,7 +533,7 @@ class ModelHMM(object):
             transition_matrix = self.transition_prior
         else:
 
-            transition_matrix = np.empty((self.n_labels, self.n_labels), dtype='float32')
+            transition_matrix = np.empty((self.n_labels, self.n_labels), dtype='float64')
             transition_matrix.fill(self.transition_prior)
             np.fill_diagonal(transition_matrix, 1.0 - self.transition_prior)
 
